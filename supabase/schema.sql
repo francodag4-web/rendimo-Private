@@ -542,3 +542,43 @@ create policy week_notes_self on public.week_notes for select to authenticated
 drop policy if exists payments_self on public.payments;
 create policy payments_self on public.payments for select to authenticated
   using (player_id = public.my_player_id());
+
+
+-- ===== Calendario del club (9-club.sql) =====
+-- Rendimo · 9: calendario del club de cada jugador (días de entreno y partidos)
+-- Lo pueden editar el entrenador y el propio jugador. Se puede ejecutar varias veces.
+
+-- Días fijos de entreno con el club (1 = lunes … 7 = domingo)
+create table if not exists public.club_schedule (
+  player_id  uuid primary key references public.players(id) on delete cascade,
+  weekdays   smallint[] not null default '{}',
+  time       text check (length(time) <= 20),
+  updated_at timestamptz not null default now()
+);
+
+-- Partidos y cambios puntuales (p. ej. «esta semana no hay entreno»)
+create table if not exists public.club_events (
+  id         uuid primary key default gen_random_uuid(),
+  player_id  uuid not null references public.players(id) on delete cascade,
+  date       date not null,
+  kind       text not null default 'partido' check (kind in ('partido','entreno','sin_entreno')),
+  label      text check (length(label) <= 80),
+  home       boolean,
+  created_by uuid default auth.uid(),
+  created_at timestamptz not null default now()
+);
+create index if not exists club_events_player_idx on public.club_events(player_id, date);
+
+alter table public.club_schedule enable row level security;
+alter table public.club_events  enable row level security;
+grant select, insert, update, delete on public.club_schedule, public.club_events to authenticated;
+
+-- El entrenador de ese jugador y el propio jugador
+drop policy if exists club_schedule_rw on public.club_schedule;
+create policy club_schedule_rw on public.club_schedule for all to authenticated
+  using (player_id = public.my_player_id() or public.coach_of(player_id) = auth.uid())
+  with check (player_id = public.my_player_id() or public.coach_of(player_id) = auth.uid());
+drop policy if exists club_events_rw on public.club_events;
+create policy club_events_rw on public.club_events for all to authenticated
+  using (player_id = public.my_player_id() or public.coach_of(player_id) = auth.uid())
+  with check (player_id = public.my_player_id() or public.coach_of(player_id) = auth.uid());

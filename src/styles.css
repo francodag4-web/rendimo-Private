@@ -314,3 +314,13 @@ th{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--mute
 .wnote{font-size:17px;line-height:1.45;white-space:pre-line;font-weight:500}
 .wnbox{border-left:4px solid var(--t-blue)}
 .wnbox .wnbox{border:none;padding:0}
+.daypick{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+.daypick button{all:unset;cursor:pointer;text-align:center;padding:9px 0;border-radius:9px;background:var(--soft);font-weight:700;border:2px solid transparent}
+.daypick button[aria-pressed="true"]{background:var(--t-blue);color:#fff}
+.daypick button:focus-visible{outline:2px solid var(--brand)}
+.ctag{display:inline-flex;align-items:center;font-size:11px;font-weight:800;padding:2px 8px;border-radius:999px;letter-spacing:.03em;white-space:nowrap}
+.ctag.club{background:var(--t-blue);color:#fff}.ctag.match{background:var(--t-red);color:#fff}.ctag.md{background:var(--soft);color:var(--ink);border:1px solid var(--line)}.ctag.off{background:var(--soft);color:var(--muted)}
+.weekstrip{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;padding:10px}
+.wsd{display:grid;gap:4px;align-content:start;padding:8px;border-radius:10px;background:var(--soft);min-width:0;font-size:13px}
+.wsd.c{box-shadow:inset 0 3px 0 var(--t-blue)}.wsd.m{box-shadow:inset 0 3px 0 var(--t-red)}
+@media (max-width:760px){.weekstrip{grid-template-columns:repeat(4,minmax(0,1fr))}}

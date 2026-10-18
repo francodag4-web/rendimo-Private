@@ -12,6 +12,9 @@ import { clashes, SET_RANGE, evoLabel, flagLabel } from '../lib/domain.js';
 import { MUSCLES } from './Library.jsx';
 import Flag, { importantOf } from './Flag.jsx';
 import WeekNoteEditor from './WeekNote.jsx';
+import ClubEditor from '../ui/ClubEditor.jsx';
+import { useClub, clubDay, matchText, nextMatch } from '../lib/club.js';
+import { sessionDate } from '../lib/program.js';
 
 export default function Programs() {
   const { route } = useCoach();
@@ -143,6 +146,7 @@ function Editor({ id }) {
   }, [undo]);
 
   const exMap = useMemo(() => Object.fromEntries(exercises.map((e) => [e.name, e])), [exercises]);
+  const club = useClub(orig?.player_id);
 
   if (!prog) return <Empty>No se encuentra este programa. <button className="btn sm" onClick={() => go('programacion')}>Volver</button></Empty>;
 
@@ -187,6 +191,7 @@ function Editor({ id }) {
 
       {!player && <Assign prog={prog} />}
       {player && <PlayerContext player={player} />}
+      {player && <ClubPanel player={player} club={club} />}
 
       {/* Fases */}
       <div className="row">
@@ -223,12 +228,14 @@ function Editor({ id }) {
         </div>
       )}
 
+      {week && player && prog.start_date && <WeekStrip prog={prog} n={weekNumber} week={week} club={club} />}
       {week && (
         <>
           {[...week.sessions].map((s, si) => ({ s, si })).sort((a, b) => a.s.day - b.s.day).map(({ s, si }) => (
             <section key={s.id} className="sess">
               <header>
                 <select aria-label="Día" value={s.day} onChange={(e) => mut((d) => { W(d).sessions[si].day = Number(e.target.value); })}>{DAYS.map((x, i) => <option key={i} value={i + 1}>{x}</option>)}</select>
+                {player && prog.start_date && <DayTag date={sessionDate(prog, weekNumber, s.day)} club={club} />}
                 <input aria-label="Nombre de la sesión" placeholder="Ej. Fuerza tren inferior" style={{ flex: '1 1 200px' }} value={s.name} onChange={(e) => mut((d) => { W(d).sessions[si].name = e.target.value; })} />
                 <button className="btn sm" onClick={() => copy('session', s, 'Sesión copiada. Pégala en otra semana o programa.')}>Copiar</button>
                 <button className="btn sm" onClick={() => mut((d) => { const c = cloneWithNewIds(s); c.day = Math.min(7, s.day + 1); W(d).sessions.push(c); })}>Duplicar</button>
@@ -406,5 +413,53 @@ function SaveBlock({ pack }) {
       <input aria-label="Nombre del bloque" autoFocus style={{ width: 170 }} value={name} onChange={(e) => setName(e.target.value)} />
       <button className="btn sm pri" type="submit">OK</button><button type="button" className="btn sm" onClick={() => setName(null)}>✕</button>
     </form>
+  );
+}
+
+const short = (d) => { const x = new Date(d + 'T00:00'); return `${x.getDate()}/${x.getMonth() + 1}`; };
+function DayTag({ date, club }) {
+  if (!date) return null;
+  const c = clubDay(date, club);
+  return (
+    <span className="row" style={{ gap: 4 }}>
+      <span className="muted small num">{short(date)}</span>
+      {c.match && <span className="ctag match" title={matchText(c.match)}>Partido</span>}
+      {c.training && <span className="ctag club">Club{c.time ? ' ' + c.time : ''}</span>}
+      {c.off && <span className="ctag off">Sin entreno club</span>}
+      {c.md && <span className="ctag md" title="Días respecto al partido más cercano">{c.md}</span>}
+    </span>
+  );
+}
+
+// La semana del jugador con sus entrenos de club y partidos, para cuadrar las sesiones
+function WeekStrip({ prog, n, week, club }) {
+  const days = Array.from({ length: 7 }, (_, i) => ({ day: i + 1, date: sessionDate(prog, n, i + 1) }));
+  return (
+    <div className="panel weekstrip" aria-label="Semana del jugador">
+      {days.map(({ day, date }) => {
+        const c = clubDay(date, club);
+        const ss = week.sessions.filter((x) => x.day === day);
+        return (
+          <div key={day} className={'wsd' + (c.match ? ' m' : c.training ? ' c' : '')}>
+            <b>{DAYS[day - 1].slice(0, 3)} <span className="muted small">{short(date)}</span></b>
+            {c.match && <span className="ctag match">{c.match.label ? `vs ${c.match.label}` : 'Partido'}</span>}
+            {c.training && <span className="ctag club">Club{c.time ? ' ' + c.time : ''}</span>}
+            {c.md && <span className="ctag md">{c.md}</span>}
+            {ss.map((x) => <span key={x.id} className="small">● {x.name || 'Sesión'}</span>)}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ClubPanel({ player, club }) {
+  const days = (club.schedule?.weekdays || []).map((d) => DAYS[d - 1].slice(0, 3).toLowerCase()).join(', ');
+  const nm = nextMatch(club);
+  return (
+    <details className="panel">
+      <summary style={{ cursor: 'pointer' }}><b>Club de {player.name.split(' ')[0]}</b> <span className="muted small">· {days ? `entrena ${days}` : 'sin días de club'}{nm ? ` · próximo partido ${short(nm.date)}${nm.label ? ' vs ' + nm.label : ''}` : ''} · lo puede editar también el jugador</span></summary>
+      <div style={{ marginTop: 12 }}>{club.ready ? <ClubEditor playerId={player.id} club={club} /> : <span className="muted">Cargando…</span>}</div>
+    </details>
   );
 }

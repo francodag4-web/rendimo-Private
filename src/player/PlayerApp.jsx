@@ -2,6 +2,8 @@ import { testSummary, fmtNum, testValue, PLANS, money, commitment, wellLevel } f
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase, q, PLATFORM, fetchAll } from '../lib/supabase.js';
 import { applyBrand } from '../App.jsx';
+import { useClub, clubDay, matchText } from '../lib/club.js';
+import ClubEditor from '../ui/ClubEditor.jsx';
 import { iso, addDays, mondayOf, dow, DAYS, fmtDate, wellness, waURL, parseISO } from '../lib/util.js';
 import { sessionsOfWeek, calendarWeekIdx, totalWeeks, label } from '../lib/program.js';
 import { useAction, Tabs, Empty, Loading, Bars, Line, WAIcon } from '../ui/ui.jsx';
@@ -18,6 +20,7 @@ export default function PlayerApp({ player, session, onLogout, canSwitch, onSwit
   const [d, setD] = useState(null);
   const [tab, setTab] = useState(() => { try { return sessionStorage.getItem('ptab') || 'hoy'; } catch { return 'hoy'; } });
   const act = useAction();
+  const club = useClub(player.id);
 
   const load = useCallback(async () => {
     const since = iso(addDays(new Date(), -90));
@@ -43,7 +46,7 @@ export default function PlayerApp({ player, session, onLogout, canSwitch, onSwit
   const today = iso();
   // Programa vigente: el más reciente que ya ha empezado; si no, el próximo
   const prog = d.programs.find((p) => p.start_date && p.start_date <= today) || d.programs[d.programs.length - 1] || null;
-  const ctx = { ...d, player, prog, load, today };
+  const ctx = { ...d, player, prog, load, today, club };
   const doneToday = d.checkins.some((c) => c.date === today);
 
   return (
@@ -406,7 +409,7 @@ function Today({ ctx, goCheckin }) {
       <button className="btn" onClick={goCheckin}>Hacer check-in</button>
     </Hero>
   );
-  const top = <><ClubRPE ctx={ctx} />{nudge}<WeekNote ctx={ctx} /></>;
+  const top = <><ClubRPE ctx={ctx} />{nudge}<WeekNote ctx={ctx} /><ClubToday ctx={ctx} /></>;
   const msg = (t, sub) => <div className="stack">{top}<Hero color="t-s" title={t} sub={sub} /></div>;
   if (!prog) return msg(`Hola, ${player.name.split(' ')[0]}`, 'Tu entrenador aún no te ha asignado un programa.');
   const w = calendarWeekIdx(prog);
@@ -431,7 +434,15 @@ function Week({ ctx }) {
   const { prog, logs, today } = ctx;
   const [off, setOff] = useState(0);
   const [openId, setOpenId] = useState(null);
-  if (!prog) return <Hero color="t-s" title="Sin programa" sub="Tu entrenador aún no te ha asignado un programa." />;
+  const [edit, setEdit] = useState(false);
+  const clubBox = (
+    <section className="panel stack">
+      <div className="between"><h3>Mi club</h3><button className="btn sm" aria-expanded={edit} onClick={() => setEdit(!edit)}>{edit ? 'Cerrar' : 'Días de club y partidos'}</button></div>
+      {!edit && <p className="muted small">Marca qué días entrenas con tu club y cuándo juegas: tu entrenador lo ve al prepararte las sesiones.</p>}
+      {edit && (ctx.club.ready ? <ClubEditor playerId={ctx.player.id} club={ctx.club} who="player" /> : <span className="muted">Cargando…</span>)}
+    </section>
+  );
+  if (!prog) return <div className="stack"><Hero color="t-s" title="Sin programa" sub="Tu entrenador aún no te ha asignado un programa." />{clubBox}</div>;
   const base = Math.max(0, calendarWeekIdx(prog) ?? 0);
   const w = Math.max(0, Math.min(totalWeeks(prog.data) - 1, base + off));
   const ss = sessionsOfWeek(prog, w);
@@ -439,7 +450,7 @@ function Week({ ctx }) {
   const monday = ss[0]?.date ? addDays(parseISO(ss[0].date), 1 - ss[0].day) : null;
   return (
     <div className="stack">
-      <Hero color="t-b" kicker={ss[0]?.phase || prog.name} title={`Semana ${w + 1}${wk?.name ? ' · ' + wk.name : ''}`} sub={`${ss.length} sesion${ss.length === 1 ? '' : 'es'} · ${ss.filter((s) => logs.some((l) => l.session_key === s.id)).length} hecha${ss.filter((s) => logs.some((l) => l.session_key === s.id)).length === 1 ? '' : 's'}`}>
+      <Hero color="t-b" kicker={ss[0]?.phase || prog.name} title={`Semana ${w + 1}${wk?.name ? ' · ' + wk.name : ''}`} sub={`${ss.length} ${ss.length === 1 ? 'sesión' : 'sesiones'} · ${ss.filter((s) => logs.some((l) => l.session_key === s.id)).length} hecha${ss.filter((s) => logs.some((l) => l.session_key === s.id)).length === 1 ? '' : 's'}`}>
         <div className="row">
           <button className="btn sm" disabled={w === 0} onClick={() => setOff(off - 1)}>‹ Anterior</button>
           <button className="btn sm" disabled={w >= totalWeeks(prog.data) - 1} onClick={() => setOff(off + 1)}>Siguiente ›</button>
@@ -451,14 +462,16 @@ function Week({ ctx }) {
           const list = ss.filter((s) => s.day === day);
           const club = date && logs.filter((l) => l.date === date && CLUB_KEYS[l.session_key]);
           const clubTxt = club?.length ? club.map((l) => `${CLUB_KEYS[l.session_key]} · RPE ${Number(l.rpe)}`).join(' · ') : '';
-          if (!list.length) return <div key={day} className="day"><b>{DAYS[i].slice(0, 3).toUpperCase()}{date ? ` ${Number(date.slice(8))}` : ''}</b><span className={clubTxt ? '' : 'muted'}>{clubTxt || 'Descanso'}</span><span className={'chip' + (clubTxt ? ' ok' : '')}>{clubTxt ? 'Club' : '—'}</span></div>;
+          const cd = date ? clubDay(date, ctx.club) : {};
+          const tags = <>{cd.match && <span className="ctag match">{matchText(cd.match)}</span>}{cd.training && <span className="ctag club">Club{cd.time ? ' ' + cd.time : ''}</span>}{cd.md && <span className="ctag md">{cd.md}</span>}</>;
+          if (!list.length) return <div key={day} className="day"><b>{DAYS[i].slice(0, 3).toUpperCase()}{date ? ` ${Number(date.slice(8))}` : ''}</b><span className="row" style={{ gap: 6 }}>{tags}<span className={clubTxt ? '' : 'muted'}>{clubTxt || (cd.match || cd.training ? '' : 'Descanso')}</span></span><span className={'chip' + (clubTxt ? ' ok' : '')}>{clubTxt ? 'Hecho' : '—'}</span></div>;
           return list.map((s) => {
             const done = logs.some((l) => l.session_key === s.id);
             const st = done ? ['Hecha', 'ok'] : s.date === today ? ['Hoy', 'warn'] : s.date < today ? ['Sin registrar', 'bad'] : ['Pendiente', ''];
             return (
               <div key={s.id} className="stack" style={{ gap: 0 }}>
                 <button type="button" className="day" aria-expanded={openId === s.id} onClick={() => setOpenId(openId === s.id ? null : s.id)}>
-                  <b>{DAYS[i].slice(0, 3).toUpperCase()}{date ? ` ${Number(date.slice(8))}` : ''}</b><span>{s.name || 'Sesión'}{clubTxt && <span className="small muted"> · {clubTxt}</span>}</span><span className={'chip ' + st[1]}>{st[0]}</span>
+                  <b>{DAYS[i].slice(0, 3).toUpperCase()}{date ? ` ${Number(date.slice(8))}` : ''}</b><span className="row" style={{ gap: 6 }}><span>{s.name || 'Sesión'}</span>{tags}{clubTxt && <span className="small muted">{clubTxt}</span>}</span><span className={'chip ' + st[1]}>{st[0]}</span>
                 </button>
                 {openId === s.id && <div style={{ padding: '10px 0' }}><SessionCard ctx={ctx} s={s} open /></div>}
               </div>
@@ -466,6 +479,7 @@ function Week({ ctx }) {
           });
         })}
       </div>
+      {clubBox}
     </div>
   );
 }
@@ -572,6 +586,9 @@ function ClubRPE({ ctx }) {
   const [min, setMin] = useState(90);
   const [open, setOpen] = useState(false);
   const done = logs.find((l) => l.date === yday && CLUB_KEYS[l.session_key]);
+  const cy = clubDay(yday, ctx.club);
+  const hasCal = (ctx.club.schedule?.weekdays || []).length > 0 || ctx.club.events.length > 0;
+  if (hasCal && !cy.training && !cy.match) return null;
   if (skipped) return null;
   if (done) return null;
   const save = () => act(async () => {
@@ -580,11 +597,11 @@ function ClubRPE({ ctx }) {
   }, `${CLUB_KEYS[kind]} de ayer registrado.`);
   const skip = () => { try { localStorage.setItem(skipKey, '1'); } catch {} setSkipped(true); };
   return (
-    <Hero color="t-r" kicker="Ayer" title="¿Entrenaste con tu club o jugaste?" sub="Apunta lo duro que fue y cuánto duró: tu entrenador suma esa carga a la tuya.">
+    <Hero color="t-r" kicker={cy.match ? `Ayer · ${matchText(cy.match)}` : cy.training ? 'Ayer tocaba club' : 'Ayer'} title={cy.match ? '¿Qué tal el partido?' : '¿Entrenaste con tu club o jugaste?'} sub="Apunta lo duro que fue y cuánto duró: tu entrenador suma esa carga a la tuya.">
       {!open ? (
         <div className="row">
-          <button className="btn" onClick={() => { setKind('club'); setOpen(true); }}>Entreno con el club</button>
-          <button className="btn" onClick={() => { setKind('partido'); setMin(80); setOpen(true); }}>Partido</button>
+          {(!hasCal || cy.training) && <button className="btn" onClick={() => { setKind('club'); setOpen(true); }}>Entreno con el club</button>}
+          {(!hasCal || cy.match || cy.training) && <button className="btn" onClick={() => { setKind('partido'); setMin(80); setOpen(true); }}>Partido</button>}
           <button className="btn ghostw" onClick={skip}>No, ayer no</button>
         </div>
       ) : (
@@ -612,4 +629,13 @@ function WeekNote({ ctx }) {
       <p className="wnote">{n.text}</p>
     </Hero>
   );
+}
+
+// Hoy toca club o partido
+function ClubToday({ ctx }) {
+  const c = clubDay(ctx.today, ctx.club);
+  if (!c.match && !c.training) return null;
+  return c.match
+    ? <Hero color="t-r" kicker="Hoy" title={matchText(c.match)} sub="Calienta bien, hidrátate y mañana apunta cómo fue." />
+    : <Hero color="t-p" kicker="Hoy" title={`Entreno con tu club${c.time ? ' · ' + c.time : ''}`} sub="Mañana te pediré el RPE y los minutos." />;
 }
