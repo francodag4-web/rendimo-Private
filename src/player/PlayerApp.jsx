@@ -1,5 +1,5 @@
-import { testSummary, fmtNum } from '../lib/domain.js';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { testSummary, fmtNum, testValue, PLANS, money, commitment, wellLevel } from '../lib/domain.js';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase, q, PLATFORM, fetchAll } from '../lib/supabase.js';
 import { applyBrand } from '../App.jsx';
 import { iso, addDays, mondayOf, dow, DAYS, fmtDate, wellness, waURL, parseISO } from '../lib/util.js';
@@ -53,14 +53,25 @@ export default function PlayerApp({ player, session, onLogout, canSwitch, onSwit
         <button className="btn sm" aria-pressed={tab === 'cuenta'} onClick={() => setT(tab === 'cuenta' ? 'hoy' : 'cuenta')}>{tab === 'cuenta' ? 'Volver' : 'Mi cuenta'}</button>
       </header>
       <div className="pwrap">
-        {tab !== 'cuenta' && <Tabs tabs={[['checkin', doneToday ? 'Check-in ✓' : 'Check-in'], ['hoy', 'Hoy'], ['semana', 'Semana'], ['progreso', 'Progreso']]} value={tab} onChange={setT} />}
+        <div className="pdate">{new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
         {tab === 'checkin' && <Checkin ctx={ctx} onDone={() => setT('hoy')} />}
-        {tab === 'hoy' && <Today ctx={ctx} />}
+        {tab === 'hoy' && <Today ctx={ctx} goCheckin={() => setT('checkin')} />}
         {tab === 'semana' && <Week ctx={ctx} />}
         {tab === 'progreso' && <Progress ctx={ctx} />}
+        {tab === 'planes' && <Plans ctx={ctx} />}
         {tab === 'cuenta' && <Account ctx={ctx} session={session} onLogout={onLogout} canSwitch={canSwitch} onSwitch={onSwitch} />}
         <Footer coach={d.coach} />
       </div>
+      {tab !== 'cuenta' && (
+        <nav className="ptabs" role="tablist" aria-label="Secciones">
+          {[['checkin', 'Check-in', doneToday ? '✓' : '●'], ['hoy', 'Hoy', '▶'], ['semana', 'Semana', '▦'], ['progreso', 'Progreso', '↗'], ['planes', 'Planes', '★']].map(([k, l, ic]) => (
+            <button key={k} type="button" role="tab" aria-selected={tab === k} onClick={() => setT(k)} className={k === 'checkin' && !doneToday ? 'due' : ''}>
+              <span aria-hidden="true" className="ic">{ic}</span>{l}
+            </button>
+          ))}
+        </nav>
+      )}
+      <RestTimer />
     </div>
   );
 }
@@ -201,15 +212,67 @@ function Account({ ctx, session, onLogout, canSwitch, onSwitch }) {
   );
 }
 
-function Scale({ value, onChange, n = 5, from = 1, name }) {
+// Escala de colores: en bienestar 1 rojo → 5 verde; en dolor y RPE 0 verde → 10 rojo
+function Scale({ value, onChange, n = 5, from = 1, name, pain }) {
+  const hue = (v) => (pain ? 120 - (v / 10) * 120 : ((v - 1) / 4) * 120);
   return (
     <div className={'scale' + (n > 5 ? ' eleven' : '')} role="radiogroup" aria-label={name}>
       {Array.from({ length: n }, (_, i) => i + from).map((v) => (
-        <button key={v} type="button" role="radio" aria-checked={value === v} aria-pressed={value === v} onClick={() => onChange(v)}>{v}</button>
+        <button key={v} type="button" role="radio" aria-checked={value === v} aria-pressed={value === v} onClick={() => onChange(v)}
+          style={{ '--h': hue(v) }}>{v}</button>
       ))}
     </div>
   );
 }
+
+// Descanso: «90», «90 s», «2'», «2 min», «1'30», «1:30» → segundos
+export const parseRest = (txt = '') => {
+  const t = String(txt).toLowerCase().replace(',', '.').trim();
+  let m = t.match(/(\d+)\s*[:']\s*(\d{1,2})/); if (m) return Number(m[1]) * 60 + Number(m[2]);
+  m = t.match(/(\d+(?:\.\d+)?)\s*(min|m\b|')/); if (m) return Math.round(Number(m[1]) * 60);
+  m = t.match(/(\d+)/); return m ? Number(m[1]) : null;
+};
+const startRest = (sec) => window.dispatchEvent(new CustomEvent('rest:start', { detail: sec }));
+
+// Temporizador de descanso fijo abajo
+function RestTimer() {
+  const [end, setEnd] = useState(null);
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const on = (e) => { setEnd(Date.now() + e.detail * 1000); setNow(Date.now()); };
+    window.addEventListener('rest:start', on);
+    return () => window.removeEventListener('rest:start', on);
+  }, []);
+  useEffect(() => {
+    if (!end) return;
+    const t = setInterval(() => {
+      setNow(Date.now());
+      if (Date.now() >= end) { clearInterval(t); try { navigator.vibrate?.([200, 100, 200]); } catch {} }
+    }, 250);
+    return () => clearInterval(t);
+  }, [end]);
+  if (!end) return null;
+  const left = Math.max(0, Math.ceil((end - now) / 1000));
+  return (
+    <div className={'timer' + (left === 0 ? ' doneT' : '')} role="timer" aria-live="polite">
+      <span>{left === 0 ? '¡A por la siguiente serie!' : 'Descanso'}</span>
+      <b className="num">{Math.floor(left / 60)}:{String(left % 60).padStart(2, '0')}</b>
+      <span className="row">
+        {left > 0 && <button type="button" className="btn sm" onClick={() => setEnd(end + 15000)}>+15 s</button>}
+        <button type="button" className="btn sm" onClick={() => setEnd(null)}>{left === 0 ? 'Cerrar' : 'Saltar'}</button>
+      </span>
+    </div>
+  );
+}
+
+const Hero = ({ color = 't-g', kicker, title, sub, children }) => (
+  <section className={'hero tile ' + color}>
+    {kicker && <span className="kick">{kicker}</span>}
+    {title && <b className="htitle">{title}</b>}
+    {sub && <span className="sub">{sub}</span>}
+    {children}
+  </section>
+);
 
 function Checkin({ ctx, onDone }) {
   const { checkins, today, player, load } = ctx;
@@ -217,15 +280,17 @@ function Checkin({ ctx, onDone }) {
   const existing = checkins.find((c) => c.date === today);
   const [f, setF] = useState(existing || { sleep: null, fatigue: null, soreness: null, stress: null, mood: null, pain: 0, note: '' });
   const complete = ITEMS.every(([k]) => f[k]);
+  const w = ITEMS.reduce((a, [k]) => a + (f[k] || 0), 0);
   const save = () => act(async () => {
     const { sleep, fatigue, soreness, stress, mood, pain, note } = f;
     await q(supabase.from('checkins').upsert({ player_id: player.id, date: today, sleep, fatigue, soreness, stress, mood, pain, note: note || null }, { onConflict: 'player_id,date' }));
     await load();
     onDone();
   }, '¡Gracias! Check-in guardado.');
+  const lvl = complete ? wellLevel(w) : '';
   return (
     <div className="stack">
-      <div><h2>¿Cómo estás hoy?</h2><p className="muted">20 segundos. 1 es lo peor y 5 lo mejor.</p></div>
+      <Hero color="t-p" kicker={existing ? 'Ya lo hiciste hoy · puedes cambiarlo' : '20 segundos'} title="¿Cómo estás hoy?" sub="1 es lo peor y 5 lo mejor. Con esto tu entrenador ajusta la sesión." />
       {ITEMS.map(([k, l, lo, hi]) => (
         <div key={k} className="panel stack" style={{ gap: 8 }}>
           <div className="between"><b>{l}</b><span className="muted small">1 {lo} · 5 {hi}</span></div>
@@ -234,17 +299,20 @@ function Checkin({ ctx, onDone }) {
       ))}
       <div className="panel stack" style={{ gap: 8 }}>
         <div className="between"><b>¿Tienes algún dolor o molestia?</b><span className="muted small">0 nada · 10 máximo</span></div>
-        <Scale name="Dolor" n={11} from={0} value={f.pain} onChange={(v) => setF({ ...f, pain: v })} />
+        <Scale name="Dolor" n={11} from={0} value={f.pain} onChange={(v) => setF({ ...f, pain: v })} pain />
         {f.pain > 0 && <input placeholder="¿Dónde? Ej. isquio derecho al esprintar" value={f.note || ''} onChange={(e) => setF({ ...f, note: e.target.value })} />}
       </div>
-      <button className="btn pri" disabled={!complete} onClick={save}>{existing ? 'Actualizar check-in' : 'Enviar check-in'}</button>
-      {complete && <p className="muted small" style={{ textAlign: 'center' }}>Bienestar de hoy: {wellness(f)}/25</p>}
+      <Hero color={lvl === 'bad' ? 't-r' : lvl === 'warn' ? 't-o' : 't-t'} kicker="Bienestar de hoy">
+        <div className="big num">{complete ? w : '—'}<small>/25</small></div>
+        <span className="sub">{!complete ? 'Responde las 5 preguntas.' : lvl === 'ok' ? 'Buen día para entrenar.' : 'Tu entrenador lo verá y puede ajustar la sesión.'}</span>
+      </Hero>
+      <button className="btn pri big-btn" disabled={!complete} onClick={save}>{existing ? 'Actualizar check-in' : 'Enviar check-in'}</button>
     </div>
   );
 }
 
 // Una sesión con sus bloques; permite registrar RPE y duración
-function SessionCard({ ctx, s, open: startOpen }) {
+function SessionCard({ ctx, s, open: startOpen, hero }) {
   const { prog, logs, player, load, exercises, today } = ctx;
   const log = logs.find((l) => l.session_key === s.id);
   const [open, setOpen] = useState(startOpen);
@@ -261,33 +329,48 @@ function SessionCard({ ctx, s, open: startOpen }) {
     setOpen(false);
   }, '¡Sesión registrada! Buen trabajo.');
   const title = s.name || 'Sesión';
+  const nEx = s.packs.reduce((a, p) => a + p.items.filter((it) => it.exercise).length, 0);
+  const nDone = Object.values(done).filter((x) => x.done).length;
   return (
-    <section className="panel stack">
-      <div className="between">
-        <div><b>{DAYS[s.day - 1]}{s.date ? ` ${Number(s.date.slice(8))}` : ''} · {title}</b><div className="muted small">{s.phase} · semana {s.weekN}</div></div>
-        <span className="row">{log && <span className="pill ok">Hecha · RPE {log.rpe}</span>}<button className="btn sm" onClick={() => setOpen(!open)}>{open ? 'Cerrar' : log ? 'Ver o editar' : 'Ver'}</button></span>
-      </div>
+    <div className="stack">
+      {hero ? (
+        <Hero color={log ? 't-t' : 't-g'} kicker={`${DAYS[s.day - 1]} · ${s.phase} · semana ${s.weekN}`} title={title} sub={`${nEx} ejercicio${nEx === 1 ? '' : 's'} · ${s.packs.length} bloque${s.packs.length === 1 ? '' : 's'}${log ? ` · hecha, RPE ${log.rpe}` : nDone ? ` · ${nDone}/${nEx} hechos` : ''}`}>
+          {nEx > 0 && <div className="bars" aria-hidden="true"><i style={{ width: `${(nDone / nEx) * 100}%`, background: '#fff' }} /></div>}
+          {!open && <button className="btn" onClick={() => setOpen(true)}>{log ? 'Ver o editar' : 'Empezar sesión'}</button>}
+        </Hero>
+      ) : (
+        <div className="between">
+          <div><b>{DAYS[s.day - 1]}{s.date ? ` ${Number(s.date.slice(8))}` : ''} · {title}</b><div className="muted small">{s.phase} · semana {s.weekN}</div></div>
+          <span className="row">{log && <span className="pill ok">Hecha · RPE {log.rpe}</span>}<button className="btn sm" onClick={() => setOpen(!open)}>{open ? 'Cerrar' : log ? 'Ver o editar' : 'Ver'}</button></span>
+        </div>
+      )}
       {open && (
         <>
           {s.packs.map((p, k) => (
-            <div key={p.id} className="stack" style={{ gap: 6 }}>
-              <div><b style={{ color: 'var(--brand)' }}>Bloque {String.fromCharCode(65 + k)} · {p.type}</b>{p.rounds ? <span className="muted"> · {p.rounds} vueltas</span> : ''}{p.notes && <div className="small muted">{p.notes}</div>}</div>
+            <div key={p.id} className="block stack" style={{ gap: 8 }}>
+              <div className="bhead"><span className="bl">{String.fromCharCode(65 + k)}</span><div><b>{p.type}</b>{p.rounds ? <span className="muted"> · {p.rounds} vueltas</span> : ''}{p.notes && <div className="small muted">{p.notes}</div>}</div></div>
               {p.items.filter((it) => it.exercise).map((it, j) => {
                 const v = vid[it.exercise];
                 const st = done[it.id] || { id: it.id, done: false, load: '' };
+                const rest = parseRest(it.rest);
                 return (
-                  <div key={it.id} className="exrow">
+                  <div key={it.id} className={'exrow' + (st.done ? ' isdone' : '')}>
                     <span className="lb">{label(k, j)}</span>
                     <div className="stack" style={{ gap: 4 }}>
                       <div className="between">
                         <b>{it.exercise}</b>
                         <input type="checkbox" aria-label={'Hecho: ' + it.exercise} checked={!!st.done} onChange={(e) => setDone({ ...done, [it.id]: { ...st, done: e.target.checked } })} />
                       </div>
-                      <span className="small">{[it.sets && `${it.sets} series`, it.reps && `${it.reps} reps`, it.load && `carga ${it.load}`, it.rest && `descanso ${it.rest}`].filter(Boolean).join(' · ')}</span>
+                      <div className="row">
+                        {it.sets && <span className="pill brand">{it.sets} series</span>}
+                        {it.reps && <span className="pill">{it.reps} reps</span>}
+                        {it.load && <span className="pill">carga {it.load}</span>}
+                      </div>
                       {it.notes && <span className="small muted">{it.notes}</span>}
                       {v?.notes && <details className="small"><summary>Cómo hacerlo</summary><p className="muted" style={{ whiteSpace: 'pre-line', marginTop: 4 }}>{v.notes.split('\nMás vídeos:')[0]}</p></details>}
                       <div className="row">
                         {v?.video_url && <a className="btn sm" href={v.video_url} target="_blank" rel="noopener">▶ Vídeo</a>}
+                        {rest ? <button type="button" className="btn sm" onClick={() => startRest(rest)}>⏱ Descanso {it.rest}</button> : null}
                         <input style={{ width: 130 }} placeholder="Carga usada" aria-label={'Carga usada en ' + it.exercise} value={st.load || ''} onChange={(e) => setDone({ ...done, [it.id]: { ...st, load: e.target.value } })} />
                       </div>
                     </div>
@@ -296,55 +379,86 @@ function SessionCard({ ctx, s, open: startOpen }) {
               })}
             </div>
           ))}
-          <div className="stack" style={{ gap: 8, borderTop: '1px solid var(--line)', paddingTop: 12 }}>
+          <div className="panel stack" style={{ gap: 8 }}>
             <b>¿Qué tan dura ha sido la sesión? (RPE)</b>
             <span className="muted small">0 reposo · 5 dura · 7 muy dura · 10 máximo esfuerzo</span>
-            <Scale name="RPE" n={11} from={0} value={rpe} onChange={setRpe} />
+            <Scale name="RPE" n={11} from={0} value={rpe} onChange={setRpe} pain />
             <label className="f">Duración (minutos)<input type="number" min="1" max="600" value={min} onChange={(e) => setMin(e.target.value)} /></label>
+            {rpe != null && <span className="small">Carga de la sesión: <b className="num">{rpe * (Number(min) || 0)}</b> (RPE × minutos)</span>}
             <label className="f">Comentario para tu entrenador (opcional)<input value={note} onChange={(e) => setNote(e.target.value)} /></label>
-            <button className="btn pri" disabled={rpe == null} onClick={save}>{log ? 'Actualizar registro' : 'Terminar y registrar sesión'}</button>
+            <button className="btn pri big-btn" disabled={rpe == null} onClick={save}>{log ? 'Actualizar registro' : 'Terminar y registrar sesión'}</button>
           </div>
         </>
       )}
-    </section>
+    </div>
   );
 }
 
-function Today({ ctx }) {
-  const { prog, today } = ctx;
-  if (!prog) return <Empty>Tu entrenador aún no te ha asignado un programa.</Empty>;
+function Today({ ctx, goCheckin }) {
+  const { prog, today, checkins, player } = ctx;
+  const doneCheck = checkins.some((c) => c.date === today);
+  const nudge = !doneCheck && (
+    <Hero color="t-o" kicker="Antes de entrenar" title="Haz tu check-in" sub="20 segundos para que tu entrenador sepa cómo llegas.">
+      <button className="btn" onClick={goCheckin}>Hacer check-in</button>
+    </Hero>
+  );
+  const msg = (t, sub) => <div className="stack">{nudge}<Hero color="t-s" title={t} sub={sub} /></div>;
+  if (!prog) return msg(`Hola, ${player.name.split(' ')[0]}`, 'Tu entrenador aún no te ha asignado un programa.');
   const w = calendarWeekIdx(prog);
-  if (w == null) return <Empty>Tu programa todavía no tiene fecha de inicio.</Empty>;
-  if (w < 0) return <Empty>Tu programa «{prog.name}» empieza el {fmtDate(prog.start_date)}.</Empty>;
-  if (w >= totalWeeks(prog.data)) return <Empty>Has terminado «{prog.name}». Tu entrenador te preparará lo siguiente.</Empty>;
+  if (w == null) return msg(prog.name, 'Tu programa todavía no tiene fecha de inicio.');
+  if (w < 0) return msg(prog.name, `Empieza el ${fmtDate(prog.start_date)}.`);
+  if (w >= totalWeeks(prog.data)) return msg('¡Programa terminado!', `Has completado «${prog.name}». Tu entrenador te preparará lo siguiente.`);
   const ss = sessionsOfWeek(prog, w);
   const todays = ss.filter((s) => s.date === today);
   const next = ss.find((s) => s.date > today) || sessionsOfWeek(prog, w + 1)[0];
   return (
     <div className="stack">
-      <div><h2>Hoy</h2><p className="muted">{prog.name} · semana {w + 1} de {totalWeeks(prog.data)}</p></div>
-      {todays.length ? todays.map((s) => <SessionCard key={s.id} ctx={ctx} s={s} open />) : (
-        <Empty>Hoy toca descanso.{next ? ` Próxima sesión: ${DAYS[next.day - 1].toLowerCase()} ${Number(next.date.slice(8))}${next.name ? ` · ${next.name}` : ''}.` : ''}</Empty>
+      {nudge}
+      {todays.length ? todays.map((s) => <SessionCard key={s.id} ctx={ctx} s={s} open={false} hero />) : (
+        <Hero color="t-s" kicker={`${prog.name} · semana ${w + 1} de ${totalWeeks(prog.data)}`} title="Hoy toca descanso"
+          sub={next ? `Próxima sesión: ${DAYS[next.day - 1].toLowerCase()} ${Number(next.date.slice(8))}${next.name ? ` · ${next.name}` : ''}.` : 'Recupera bien: sueño, comida e hidratación.'} />
       )}
     </div>
   );
 }
 
 function Week({ ctx }) {
-  const { prog } = ctx;
+  const { prog, logs, today } = ctx;
   const [off, setOff] = useState(0);
-  if (!prog) return <Empty>Tu entrenador aún no te ha asignado un programa.</Empty>;
+  const [openId, setOpenId] = useState(null);
+  if (!prog) return <Hero color="t-s" title="Sin programa" sub="Tu entrenador aún no te ha asignado un programa." />;
   const base = Math.max(0, calendarWeekIdx(prog) ?? 0);
   const w = Math.max(0, Math.min(totalWeeks(prog.data) - 1, base + off));
   const ss = sessionsOfWeek(prog, w);
+  const wk = prog.data.phases.flatMap((ph) => ph.weeks)[w];
+  const monday = ss[0]?.date ? addDays(parseISO(ss[0].date), 1 - ss[0].day) : null;
   return (
     <div className="stack">
-      <div className="between">
-        <button className="btn sm" disabled={w === 0} onClick={() => setOff(off - 1)}>‹ Anterior</button>
-        <div style={{ textAlign: 'center' }}><h2>Semana {w + 1}</h2><span className="muted small">{ss[0]?.phase}</span></div>
-        <button className="btn sm" disabled={w >= totalWeeks(prog.data) - 1} onClick={() => setOff(off + 1)}>Siguiente ›</button>
+      <Hero color="t-b" kicker={ss[0]?.phase || prog.name} title={`Semana ${w + 1}${wk?.name ? ' · ' + wk.name : ''}`} sub={`${ss.length} sesion${ss.length === 1 ? '' : 'es'} · ${ss.filter((s) => logs.some((l) => l.session_key === s.id)).length} hecha${ss.filter((s) => logs.some((l) => l.session_key === s.id)).length === 1 ? '' : 's'}`}>
+        <div className="row">
+          <button className="btn sm" disabled={w === 0} onClick={() => setOff(off - 1)}>‹ Anterior</button>
+          <button className="btn sm" disabled={w >= totalWeeks(prog.data) - 1} onClick={() => setOff(off + 1)}>Siguiente ›</button>
+        </div>
+      </Hero>
+      <div className="week">
+        {Array.from({ length: 7 }, (_, i) => {
+          const day = i + 1; const date = monday ? iso(addDays(monday, i)) : null;
+          const list = ss.filter((s) => s.day === day);
+          if (!list.length) return <div key={day} className="day"><b>{DAYS[i].slice(0, 3).toUpperCase()}</b><span className="muted">Descanso</span><span className="chip">—</span></div>;
+          return list.map((s) => {
+            const done = logs.some((l) => l.session_key === s.id);
+            const st = done ? ['Hecha', 'ok'] : s.date === today ? ['Hoy', 'warn'] : s.date < today ? ['Sin registrar', 'bad'] : ['Pendiente', ''];
+            return (
+              <div key={s.id} className="stack" style={{ gap: 0 }}>
+                <button type="button" className="day" aria-expanded={openId === s.id} onClick={() => setOpenId(openId === s.id ? null : s.id)}>
+                  <b>{DAYS[i].slice(0, 3).toUpperCase()}{date ? ` ${Number(date.slice(8))}` : ''}</b><span>{s.name || 'Sesión'}</span><span className={'chip ' + st[1]}>{st[0]}</span>
+                </button>
+                {openId === s.id && <div style={{ padding: '10px 0' }}><SessionCard ctx={ctx} s={s} open /></div>}
+              </div>
+            );
+          });
+        })}
       </div>
-      {ss.length ? ss.map((s) => <SessionCard key={s.id} ctx={ctx} s={s} open={false} />) : <Empty>Semana sin sesiones.</Empty>}
     </div>
   );
 }
@@ -352,6 +466,7 @@ function Week({ ctx }) {
 function Progress({ ctx }) {
   const { logs, checkins, tests = [] } = ctx;
   const sums = testSummary(tests);
+  const [sel, setSel] = useState('');
   const mon = mondayOf(new Date());
   const weeks = Array.from({ length: 8 }, (_, i) => {
     const a = addDays(mon, -7 * (7 - i)); const b = addDays(a, 6);
@@ -363,23 +478,59 @@ function Progress({ ctx }) {
     return { label: `${Number(d.slice(8))}/${Number(d.slice(5, 7))}`, value: c ? wellness(c) : null };
   });
   const streak = (() => { let n = 0; for (let i = 0; i < 60; i++) { if (checkins.some((c) => c.date === iso(addDays(new Date(), -i)))) n++; else if (i > 0) break; } return n; })();
+  const cur = sums.find((x) => x.name === sel) || sums.find((x) => x.list.length > 1) || sums[0];
+  const vals = cur ? cur.list.map(testValue) : [];
+  const lo = vals.length ? Math.min(...vals) : 0; const hi = vals.length ? Math.max(...vals) : 1; const pad = (hi - lo) * 0.25 || Math.abs(hi) * 0.05 || 1;
   return (
     <div className="stack">
-      <div className="grid2">
-        <div className="panel"><div className="muted small">Sesiones esta semana</div><h2 className="num">{weeks[7].n}</h2></div>
-        <div className="panel"><div className="muted small">Días seguidos con check-in</div><h2 className="num">{streak}</h2></div>
+      <div className="grid2 keep2">
+        <Hero color="t-p" kicker="Esta semana"><div className="big num">{weeks[7].n}</div><span className="sub">{weeks[7].n === 1 ? 'sesión registrada' : 'sesiones registradas'}</span></Hero>
+        <Hero color="t-o" kicker="Racha"><div className="big num">{streak}</div><span className="sub">{streak === 1 ? 'día con check-in' : 'días seguidos con check-in'}</span></Hero>
       </div>
-      <div className="panel stack"><h3>Tu carga semanal</h3><p className="muted small">RPE × minutos de cada sesión, sumado por semana.</p><Bars data={weeks} /></div>
-      <div className="panel stack"><h3>Tu bienestar</h3><p className="muted small">De 5 a 25. Si baja varios días seguidos, coméntalo con tu entrenador.</p><Line data={days} min={5} max={25} refLine={13} /></div>
       {sums.length > 0 && (
-        <div className="panel stack">
-          <h3>Tus tests</h3>
-          <ul className="list">{sums.map((s) => (
-            <li key={s.name}><span><b>{s.name}</b> <span className="muted small">{s.unit}</span></span>
-              <span className="row num">{s.list.length > 1 && <span className="muted small">inicio {fmtNum(s.v0)} →</span>}<b>{fmtNum(s.v1)}</b>{s.change != null && <span className={'pill ' + (s.improved ? 'ok' : 'warn')}>{s.change > 0 ? '+' : ''}{fmtNum(s.change, 1)} %</span>}</span></li>
+        <Hero color="t-a" kicker="Mis marcas">
+          <ul>{sums.map((x) => (
+            <li key={x.name}><span><b>{x.name}</b> <span className="small">{x.unit}</span></span>
+              <span className="row num"><b>{fmtNum(x.v1)}</b>{x.change != null && <span className="pill">{x.change > 0 ? '+' : ''}{fmtNum(x.change, 1)} %{x.improved ? ' ↑' : ''}</span>}</span></li>
           ))}</ul>
+        </Hero>
+      )}
+      {cur && cur.list.length > 1 && (
+        <div className="panel stack">
+          <div className="between"><h3>{cur.name} ({cur.unit || '—'})</h3>
+            {sums.length > 1 && <select aria-label="Test" style={{ width: 'auto' }} value={cur.name} onChange={(e) => setSel(e.target.value)}>{sums.map((x) => <option key={x.name}>{x.name}</option>)}</select>}</div>
+          <Line data={cur.list.map((t, i) => ({ label: `T${i}`, value: testValue(t) }))} min={Math.round((lo - pad) * 100) / 100} max={Math.round((hi + pad) * 100) / 100} />
+          <p className="small muted">Inicio {fmtNum(cur.v0)} → ahora {fmtNum(cur.v1)} {cur.unit}{cur.improved ? ' · ¡mejorando!' : ''}</p>
         </div>
       )}
+      <div className="panel stack"><h3>Tu carga semanal</h3><p className="muted small">RPE × minutos de cada sesión, sumado por semana.</p><Bars data={weeks} /></div>
+      <div className="panel stack"><h3>Tu bienestar</h3><p className="muted small">De 5 a 25. Si baja varios días seguidos, coméntalo con tu entrenador.</p><Line data={days} min={5} max={25} refLine={13} /></div>
+    </div>
+  );
+}
+
+// Planes disponibles; el suyo marcado
+function Plans({ ctx }) {
+  const { player, coach } = ctx;
+  const first = player.name.split(' ')[0];
+  const com = commitment(player);
+  return (
+    <div className="stack">
+      <Hero color="t-s" kicker="Planes" title={`Hola, ${first}`} sub={player.plan ? `Tu plan: ${player.plan}${player.commitment_months ? ` · ${com.text}` : ''}.` : 'Elige cómo quieres trabajar.'} />
+      {PLANS.map((pl) => {
+        const mine = player.plan === pl.name;
+        const msg = `Hola, soy ${first}. Me interesa ${mine ? 'seguir con' : 'el plan'} «${pl.name}» (${pl.fee} €${pl.type === 'unico' ? ' pago único' : '/mes'}). ¿Lo hablamos?`;
+        return (
+          <section key={pl.name} className={'tile ' + pl.color + (mine ? ' mine' : '')} aria-label={pl.name}>
+            <h3>{pl.name} <span className="pill">{mine ? 'Tu plan' : pl.tag}</span></h3>
+            <div className="big num">{pl.fee}<small> €{pl.type === 'unico' ? ' pago único' : '/mes'}</small></div>
+            <div className="sub">{pl.pitch}</div>
+            <ul>{pl.features.map((f) => <li key={f}><span>✓ {f.replace('su posición', 'tu posición').replace('su fisio', 'tu fisio')}</span></li>)}</ul>
+            {pl.commitment && <div className="sub">Compromiso de {pl.commitment} meses: es el tiempo mínimo para que la fuerza y la velocidad se noten en los tests. Después, mes a mes.</div>}
+            {coach?.whatsapp && <a className="btn" target="_blank" rel="noopener" href={waURL(coach.whatsapp, msg)}><WAIcon /> {mine ? 'Hablar de mi plan' : 'Me interesa'}</a>}
+          </section>
+        );
+      })}
     </div>
   );
 }
