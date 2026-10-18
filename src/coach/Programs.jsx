@@ -11,6 +11,7 @@ import {
 import { clashes, SET_RANGE, evoLabel, flagLabel } from '../lib/domain.js';
 import { MUSCLES } from './Library.jsx';
 import Flag, { importantOf } from './Flag.jsx';
+import WeekNoteEditor from './WeekNote.jsx';
 
 export default function Programs() {
   const { route } = useCoach();
@@ -359,6 +360,7 @@ function PlayerContext({ player }) {
           <div key={e.id}><span className={'cat cat-' + e.category}>{evoLabel(e.category)}</span> <span className="muted small">{fmtDate(e.date)}</span><div>{e.text}</div></div>
         )) : <span className="muted small">Sin entradas todavía.</span>}
       </div>
+      <div style={{ gridColumn: '1 / -1' }}><WeekNoteEditor p={player} /></div>
     </div>
   );
 }

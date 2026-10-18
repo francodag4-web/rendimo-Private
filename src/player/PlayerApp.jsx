@@ -16,20 +16,23 @@ const ITEMS = [
 
 export default function PlayerApp({ player, session, onLogout, canSwitch, onSwitch }) {
   const [d, setD] = useState(null);
-  const [tab, setTab] = useState(() => { try { return sessionStorage.getItem('ptab') || 'checkin'; } catch { return 'checkin'; } });
+  const [tab, setTab] = useState(() => { try { return sessionStorage.getItem('ptab') || 'hoy'; } catch { return 'hoy'; } });
   const act = useAction();
 
   const load = useCallback(async () => {
     const since = iso(addDays(new Date(), -90));
-    const [coach, programs, checkins, logs, exercises, tests] = await Promise.all([
+    const soft = (b) => b.then(({ data }) => data || []);
+    const [coach, programs, checkins, logs, exercises, tests, payments, weekNotes] = await Promise.all([
       q(supabase.from('coaches').select('*').eq('id', player.coach_id).limit(1)).then((r) => r[0] || null),
       q(supabase.from('programs').select('*').eq('player_id', player.id).order('start_date', { ascending: false })),
       q(supabase.from('checkins').select('*').eq('player_id', player.id).gte('date', since).order('date')),
       q(supabase.from('session_logs').select('*').eq('player_id', player.id).gte('date', since).order('date')),
       fetchAll(() => supabase.from('exercises').select('name,video_url,notes').order('id')),
-      supabase.from('tests').select('*').eq('player_id', player.id).order('date').order('created_at').then(({ data }) => data || []),
+      soft(supabase.from('tests').select('*').eq('player_id', player.id).order('date').order('created_at')),
+      soft(supabase.from('payments').select('*').eq('player_id', player.id)),
+      soft(supabase.from('week_notes').select('*').eq('player_id', player.id).order('week', { ascending: false }).limit(4)),
     ]);
-    setD({ coach, programs, checkins, logs, exercises, tests });
+    setD({ coach, programs, checkins, logs, exercises, tests, payments, weekNotes });
   }, [player.id, player.coach_id]);
 
   useEffect(() => { act(load); }, [load]);
@@ -64,8 +67,8 @@ export default function PlayerApp({ player, session, onLogout, canSwitch, onSwit
       </div>
       {tab !== 'cuenta' && (
         <nav className="ptabs" role="tablist" aria-label="Secciones">
-          {[['checkin', 'Check-in', doneToday ? '✓' : '●'], ['hoy', 'Hoy', '▶'], ['semana', 'Semana', '▦'], ['progreso', 'Progreso', '↗'], ['planes', 'Planes', '★']].map(([k, l, ic]) => (
-            <button key={k} type="button" role="tab" aria-selected={tab === k} onClick={() => setT(k)} className={k === 'checkin' && !doneToday ? 'due' : ''}>
+          {[['checkin', 'Check-in', doneToday ? '✓' : '●'], ['semana', 'Semana', '▦'], ['hoy', 'Hoy', '▶'], ['progreso', 'Progreso', '↗'], ['planes', 'Planes', '★']].map(([k, l, ic]) => (
+            <button key={k} type="button" role="tab" aria-selected={tab === k} onClick={() => setT(k)} className={(k === 'hoy' ? 'mid ' : '') + (k === 'checkin' && !doneToday ? 'due' : '')}>
               <span aria-hidden="true" className="ic">{ic}</span>{l}
             </button>
           ))}
@@ -134,6 +137,7 @@ function Account({ ctx, session, onLogout, canSwitch, onSwitch }) {
           <dt>Correo</dt><dd>{player.email}</dd>
           {player.position && <><dt>Posición</dt><dd>{player.position}</dd></>}
           {player.plan && <><dt>Plan</dt><dd>{player.plan}</dd></>}
+          {payState(ctx) && <><dt>Pago</dt><dd><span className={'pill ' + (payState(ctx).paid ? 'ok' : 'bad')}>{payState(ctx).text}</span></dd></>}
           <dt>Con {coachName} desde</dt><dd>{fmtDate(player.start_date)}</dd>
           <dt>Check-ins (90 días)</dt><dd className="num">{checkins.length}</dd>
           <dt>Sesiones registradas</dt><dd className="num">{logs.length}</dd>
@@ -398,11 +402,12 @@ function Today({ ctx, goCheckin }) {
   const { prog, today, checkins, player } = ctx;
   const doneCheck = checkins.some((c) => c.date === today);
   const nudge = !doneCheck && (
-    <Hero color="t-o" kicker="Antes de entrenar" title="Haz tu check-in" sub="20 segundos para que tu entrenador sepa cómo llegas.">
+    <Hero color="t-o" kicker="Para la sesión de hoy" title="Haz tu check-in" sub="20 segundos para que tu entrenador sepa cómo llegas.">
       <button className="btn" onClick={goCheckin}>Hacer check-in</button>
     </Hero>
   );
-  const msg = (t, sub) => <div className="stack">{nudge}<Hero color="t-s" title={t} sub={sub} /></div>;
+  const top = <><ClubRPE ctx={ctx} />{nudge}<WeekNote ctx={ctx} /></>;
+  const msg = (t, sub) => <div className="stack">{top}<Hero color="t-s" title={t} sub={sub} /></div>;
   if (!prog) return msg(`Hola, ${player.name.split(' ')[0]}`, 'Tu entrenador aún no te ha asignado un programa.');
   const w = calendarWeekIdx(prog);
   if (w == null) return msg(prog.name, 'Tu programa todavía no tiene fecha de inicio.');
@@ -413,7 +418,7 @@ function Today({ ctx, goCheckin }) {
   const next = ss.find((s) => s.date > today) || sessionsOfWeek(prog, w + 1)[0];
   return (
     <div className="stack">
-      {nudge}
+      {top}
       {todays.length ? todays.map((s) => <SessionCard key={s.id} ctx={ctx} s={s} open={false} hero />) : (
         <Hero color="t-s" kicker={`${prog.name} · semana ${w + 1} de ${totalWeeks(prog.data)}`} title="Hoy toca descanso"
           sub={next ? `Próxima sesión: ${DAYS[next.day - 1].toLowerCase()} ${Number(next.date.slice(8))}${next.name ? ` · ${next.name}` : ''}.` : 'Recupera bien: sueño, comida e hidratación.'} />
@@ -444,14 +449,16 @@ function Week({ ctx }) {
         {Array.from({ length: 7 }, (_, i) => {
           const day = i + 1; const date = monday ? iso(addDays(monday, i)) : null;
           const list = ss.filter((s) => s.day === day);
-          if (!list.length) return <div key={day} className="day"><b>{DAYS[i].slice(0, 3).toUpperCase()}</b><span className="muted">Descanso</span><span className="chip">—</span></div>;
+          const club = date && logs.filter((l) => l.date === date && CLUB_KEYS[l.session_key]);
+          const clubTxt = club?.length ? club.map((l) => `${CLUB_KEYS[l.session_key]} · RPE ${Number(l.rpe)}`).join(' · ') : '';
+          if (!list.length) return <div key={day} className="day"><b>{DAYS[i].slice(0, 3).toUpperCase()}{date ? ` ${Number(date.slice(8))}` : ''}</b><span className={clubTxt ? '' : 'muted'}>{clubTxt || 'Descanso'}</span><span className={'chip' + (clubTxt ? ' ok' : '')}>{clubTxt ? 'Club' : '—'}</span></div>;
           return list.map((s) => {
             const done = logs.some((l) => l.session_key === s.id);
             const st = done ? ['Hecha', 'ok'] : s.date === today ? ['Hoy', 'warn'] : s.date < today ? ['Sin registrar', 'bad'] : ['Pendiente', ''];
             return (
               <div key={s.id} className="stack" style={{ gap: 0 }}>
                 <button type="button" className="day" aria-expanded={openId === s.id} onClick={() => setOpenId(openId === s.id ? null : s.id)}>
-                  <b>{DAYS[i].slice(0, 3).toUpperCase()}{date ? ` ${Number(date.slice(8))}` : ''}</b><span>{s.name || 'Sesión'}</span><span className={'chip ' + st[1]}>{st[0]}</span>
+                  <b>{DAYS[i].slice(0, 3).toUpperCase()}{date ? ` ${Number(date.slice(8))}` : ''}</b><span>{s.name || 'Sesión'}{clubTxt && <span className="small muted"> · {clubTxt}</span>}</span><span className={'chip ' + st[1]}>{st[0]}</span>
                 </button>
                 {openId === s.id && <div style={{ padding: '10px 0' }}><SessionCard ctx={ctx} s={s} open /></div>}
               </div>
@@ -514,9 +521,13 @@ function Plans({ ctx }) {
   const { player, coach } = ctx;
   const first = player.name.split(' ')[0];
   const com = commitment(player);
+  const pay = payState(ctx);
   return (
     <div className="stack">
-      <Hero color="t-s" kicker="Planes" title={`Hola, ${first}`} sub={player.plan ? `Tu plan: ${player.plan}${player.commitment_months ? ` · ${com.text}` : ''}.` : 'Elige cómo quieres trabajar.'} />
+      <Hero color={pay?.paid === false ? 't-r' : 't-s'} kicker="Mi plan" title={player.plan || 'Sin plan todavía'} sub={player.plan ? `${player.fee != null ? money(player.fee) + (player.fee_type === 'unico' ? ' pago único' : '/mes') : ''}${player.commitment_months ? ` · ${com.text}` : ''}` : 'Elige cómo quieres trabajar.'}>
+        {pay && <span className={'paychip ' + (pay.paid ? 'ok' : 'bad')}>{pay.text}</span>}
+        {pay && !pay.paid && coach?.whatsapp && <a className="btn" target="_blank" rel="noopener" href={waURL(coach.whatsapp, `Hola, soy ${first}. Te escribo por el pago de ${pay.month}.`)}><WAIcon /> Hablar del pago</a>}
+      </Hero>
       {PLANS.map((pl) => {
         const mine = player.plan === pl.name;
         const msg = `Hola, soy ${first}. Me interesa ${mine ? 'seguir con' : 'el plan'} «${pl.name}» (${pl.fee} €${pl.type === 'unico' ? ' pago único' : '/mes'}). ¿Lo hablamos?`;
@@ -532,5 +543,73 @@ function Plans({ ctx }) {
         );
       })}
     </div>
+  );
+}
+
+// Estado de pago del mes (o del pago único)
+const MONTHS_ES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+function payState({ player, payments = [] }) {
+  if (player.fee == null) return null;
+  const mk = iso().slice(0, 7);
+  const month = MONTHS_ES[Number(mk.slice(5)) - 1];
+  if (player.fee_type === 'unico') {
+    const p = payments[0];
+    return p ? { paid: true, month, text: '✓ Pago único hecho' } : { paid: false, month: 'tu programa', text: 'Pago pendiente' };
+  }
+  return payments.some((x) => x.month === mk) ? { paid: true, month, text: `✓ ${month[0].toUpperCase() + month.slice(1)} pagado` } : { paid: false, month, text: `Pago de ${month} pendiente` };
+}
+
+// Entrenos del club y partidos: también cuentan en la carga (RPE × minutos)
+const CLUB_KEYS = { club: 'Entreno club', partido: 'Partido' };
+function ClubRPE({ ctx }) {
+  const { logs, player, load } = ctx;
+  const act = useAction();
+  const yday = iso(addDays(new Date(), -1));
+  const skipKey = `noclub:${player.id}:${yday}`;
+  const [skipped, setSkipped] = useState(() => { try { return localStorage.getItem(skipKey) === '1'; } catch { return false; } });
+  const [kind, setKind] = useState('club');
+  const [rpe, setRpe] = useState(null);
+  const [min, setMin] = useState(90);
+  const [open, setOpen] = useState(false);
+  const done = logs.find((l) => l.date === yday && CLUB_KEYS[l.session_key]);
+  if (skipped) return null;
+  if (done) return null;
+  const save = () => act(async () => {
+    await q(supabase.from('session_logs').upsert({ player_id: player.id, program_id: null, session_key: kind, date: yday, rpe, duration_min: Number(min) || null, sets: [] }, { onConflict: 'player_id,session_key,date' }));
+    await load();
+  }, `${CLUB_KEYS[kind]} de ayer registrado.`);
+  const skip = () => { try { localStorage.setItem(skipKey, '1'); } catch {} setSkipped(true); };
+  return (
+    <Hero color="t-r" kicker="Ayer" title="¿Entrenaste con tu club o jugaste?" sub="Apunta lo duro que fue y cuánto duró: tu entrenador suma esa carga a la tuya.">
+      {!open ? (
+        <div className="row">
+          <button className="btn" onClick={() => { setKind('club'); setOpen(true); }}>Entreno con el club</button>
+          <button className="btn" onClick={() => { setKind('partido'); setMin(80); setOpen(true); }}>Partido</button>
+          <button className="btn ghostw" onClick={skip}>No, ayer no</button>
+        </div>
+      ) : (
+        <div className="stack" style={{ gap: 8 }}>
+          <b>{CLUB_KEYS[kind]} · ¿qué tan duro fue? (RPE)</b>
+          <span className="small">0 reposo · 5 duro · 7 muy duro · 10 máximo</span>
+          <Scale name="RPE del club" n={11} from={0} value={rpe} onChange={setRpe} pain />
+          <label className="f" style={{ color: 'inherit' }}>Minutos<input type="number" min="1" max="600" value={min} onChange={(e) => setMin(e.target.value)} /></label>
+          {rpe != null && <span className="small">Carga: <b className="num">{rpe * (Number(min) || 0)}</b> (RPE × minutos)</span>}
+          <div className="row"><button className="btn" disabled={rpe == null} onClick={save}>Guardar</button><button className="btn ghostw" onClick={() => setOpen(false)}>Cancelar</button></div>
+        </div>
+      )}
+    </Hero>
+  );
+}
+
+// Nota de la semana que deja el entrenador
+function WeekNote({ ctx }) {
+  const { weekNotes = [], coach } = ctx;
+  const monday = iso(mondayOf(new Date()));
+  const n = weekNotes.find((x) => x.week === monday);
+  if (!n) return null;
+  return (
+    <Hero color="t-b" kicker={`Esta semana · ${coach?.brand_short || coach?.brand_name || 'tu entrenador'}`}>
+      <p className="wnote">{n.text}</p>
+    </Hero>
   );
 }

@@ -302,3 +302,15 @@ th{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--mute
 .timer.doneT{background:var(--t-green)}
 .grid2.keep2{grid-template-columns:repeat(2,minmax(0,1fr))}
 .pwrap{padding-bottom:110px}
+.ptabs button.mid{flex:1.25 1 0}
+.ptabs button.mid .ic{display:grid;place-items:center;width:46px;height:46px;margin-top:-22px;border-radius:50%;background:var(--brand);color:var(--brand-ink)!important;font-size:20px;box-shadow:0 0 0 5px var(--surface)}
+.ptabs button.mid[aria-selected="true"]{background:transparent}
+.paychip{justify-self:start;align-self:flex-start;font-weight:800;font-size:14px;padding:5px 12px;border-radius:999px;background:#fff}
+.paychip.ok{color:#1E7B34}.paychip.bad{color:#B3261E}
+.hero .btn.ghostw{background:transparent;color:inherit;border-color:rgba(255,255,255,.6)}
+.hero .scale button{background:rgba(255,255,255,.2);color:#fff}
+.hero .scale button[aria-pressed="true"]{background:#fff;color:#1b1b1b;border-color:hsl(var(--h) 60% 45%)}
+.hero input{background:rgba(255,255,255,.95);color:#1b1b1b;border:none}
+.wnote{font-size:17px;line-height:1.45;white-space:pre-line;font-weight:500}
+.wnbox{border-left:4px solid var(--t-blue)}
+.wnbox .wnbox{border:none;padding:0}

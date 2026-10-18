@@ -74,6 +74,7 @@ export default function CoachApp({ session, onLogout, canSwitch, onSwitch }) {
       payments: () => soft(supabase.from('payments').select('*')),
       leads: () => soft(supabase.from('leads').select('*').order('created_at', { ascending: false })),
       blocks: () => soft(supabase.from('saved_blocks').select('*').order('name')),
+      weekNotes: () => soft(supabase.from('week_notes').select('*').gte('week', iso(addDays(new Date(), -35)))),
     };
     const keys = only ? [].concat(only) : Object.keys(jobs);
     try {

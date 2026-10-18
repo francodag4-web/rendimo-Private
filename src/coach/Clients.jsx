@@ -12,6 +12,7 @@ import {
 } from '../lib/domain.js';
 import Flag from './Flag.jsx';
 import { PlayerPrograms, Health, Notes } from './PlayerTabs.jsx';
+import WeekNoteEditor from './WeekNote.jsx';
 
 const END_REASONS = ['Objetivo cumplido', 'Precio', 'Falta de tiempo', 'Lesión', 'Se pasa a presencial', 'Sin respuesta', 'Otro'];
 
@@ -52,6 +53,9 @@ function PlayerList() {
         <div><h1>Jugadores</h1><p>{players.filter((p) => !p.end_date).length} activos{avg != null ? ` · permanencia media ${avg.toFixed(1).replace('.', ',')} meses` : ''}</p></div>
         <button className="btn pri" onClick={() => go('clientes', 'nuevo')}>+ Nuevo jugador</button>
       </div>
+      {!baja && players.some((p) => !p.end_date) && (
+        <details className="panel"><summary style={{ cursor: 'pointer', fontWeight: 700 }}>✎ Nota de la semana para todos</summary><div style={{ marginTop: 10 }}><WeekNoteEditor all /></div></details>
+      )}
       <div className="row">
         <input id="cq" style={{ maxWidth: 320 }} placeholder="Buscar por nombre, posición o plan" value={qy} onChange={(e) => setQy(e.target.value)} />
         <Tabs tabs={[['activos', 'Activos'], ['baja', 'De baja']]} value={show} onChange={setShow} />
@@ -241,6 +245,7 @@ function Summary({ p, onTab }) {
 
   return (
     <div className="stack">
+      {!p.end_date && <WeekNoteEditor p={p} />}
       <div className="grid2">
         <TestChart p={p} onTab={onTab} />
         <div className="panel">
@@ -277,8 +282,8 @@ function Summary({ p, onTab }) {
       <div className="panel stack">
         <h3>Últimas sesiones</h3>
         {ls.length ? (
-          <div className="tablewrap"><table><thead><tr><th>Fecha</th><th>RPE</th><th>Min</th><th>sRPE</th><th>Comentario</th></tr></thead>
-            <tbody>{[...ls].reverse().slice(0, 10).map((l) => <tr key={l.id}><td>{fmtDate(l.date)}</td><td className="num">{l.rpe ?? '—'}</td><td className="num">{l.duration_min ?? '—'}</td><td className="num">{l.srpe ?? '—'}</td><td>{l.note || ''}</td></tr>)}</tbody>
+          <div className="tablewrap"><table><thead><tr><th>Fecha</th><th>Tipo</th><th>RPE</th><th>Min</th><th>sRPE</th><th>Comentario</th></tr></thead>
+            <tbody>{[...ls].reverse().slice(0, 10).map((l) => <tr key={l.id}><td>{fmtDate(l.date)}</td><td>{l.session_key === 'club' ? <span className="pill brand">Club</span> : l.session_key === 'partido' ? <span className="pill warn">Partido</span> : 'Sesión'}</td><td className="num">{l.rpe ?? '—'}</td><td className="num">{l.duration_min ?? '—'}</td><td className="num">{l.srpe ?? '—'}</td><td>{l.note || ''}</td></tr>)}</tbody>
           </table></div>
         ) : <Empty>Todavía no ha registrado sesiones.</Empty>}
       </div>

@@ -512,3 +512,33 @@ create policy blocks_coach on public.saved_blocks for all to authenticated
 drop policy if exists tests_self on public.tests;
 create policy tests_self on public.tests for select to authenticated
   using (player_id = public.my_player_id());
+
+
+-- ===== Nota de la semana y pagos visibles para el jugador (8-semana.sql) =====
+-- Rendimo · 8: nota de la semana para cada jugador y que el jugador vea sus pagos
+-- Se puede ejecutar varias veces sin problema.
+
+-- Nota de la semana (la escribe el entrenador, la lee el jugador en «Hoy»)
+create table if not exists public.week_notes (
+  id         uuid primary key default gen_random_uuid(),
+  coach_id   uuid not null references public.coaches(id) on delete cascade,
+  player_id  uuid not null references public.players(id) on delete cascade,
+  week       date not null,                      -- lunes de esa semana
+  text       text not null check (length(text) <= 1000),
+  updated_at timestamptz not null default now(),
+  unique (player_id, week)
+);
+alter table public.week_notes enable row level security;
+grant select, insert, update, delete on public.week_notes to authenticated;
+
+drop policy if exists week_notes_coach on public.week_notes;
+create policy week_notes_coach on public.week_notes for all to authenticated
+  using (coach_id = auth.uid()) with check (coach_id = auth.uid() and public.coach_of(player_id) = auth.uid());
+drop policy if exists week_notes_self on public.week_notes;
+create policy week_notes_self on public.week_notes for select to authenticated
+  using (player_id = public.my_player_id());
+
+-- El jugador ve sus propios pagos (solo lectura)
+drop policy if exists payments_self on public.payments;
+create policy payments_self on public.payments for select to authenticated
+  using (player_id = public.my_player_id());
