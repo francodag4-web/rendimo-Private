@@ -3,10 +3,24 @@ import { iso, parseISO, addDays, daysBetween, norm } from './util.js';
 
 // Escalera de precios acordada (se puede cambiar el importe de cada jugador)
 export const PLANS = [
-  { name: 'Coaching rugby', fee: 89, type: 'mensual' },
-  { name: 'Readaptación', fee: 149, type: 'mensual' },
-  { name: 'Programa pretemporada', fee: 39, type: 'unico' },
+  { name: 'Programa pretemporada', fee: 39, type: 'unico', commitment: null, review: null, color: 't-a', tag: 'Sin seguimiento',
+    pitch: 'Para entrenar por tu cuenta con un plan serio.',
+    features: ['8 semanas de fuerza, velocidad y resistencia', 'Vídeo de cada ejercicio', 'Tests de inicio y final para comprobar el progreso'] },
+  { name: 'Coaching rugby', fee: 89, type: 'mensual', commitment: 3, review: 14, color: 't-g', tag: 'El más elegido',
+    pitch: 'Plan personalizado y seguimiento para rendir en el campo.',
+    features: ['Valoración y tests iniciales', 'Plan adaptado a su posición y calendario del club', 'Ajuste de cargas cada dos semanas', 'WhatsApp para dudas', 'Re-test al final de cada bloque'] },
+  { name: 'Readaptación', fee: 149, type: 'mensual', commitment: 3, review: 7, color: 't-r', tag: 'Plazas limitadas',
+    pitch: 'Vuelta al juego tras lesión, por fases y con criterios.',
+    features: ['Todo lo del coaching rugby', 'Revisión semanal', 'Criterios objetivos para volver al contacto', 'Coordinación con su fisio o médico si hace falta'] },
 ];
+// Datos que cambian al pasar a un jugador a un plan
+export const planPatch = (plan, p = {}) => {
+  const d = PLANS.find((x) => x.name === plan);
+  if (!d) return { plan };
+  const patch = { plan, fee: d.fee, fee_type: d.type, commitment_months: d.commitment, review_days: d.review || p.review_days || 14 };
+  if (d.review && !p.next_review) patch.next_review = iso(addDays(new Date(), d.review));
+  return patch;
+};
 export const LEGACY_PLANS = ['Online', 'Online + revisiones', 'Presencial'];
 export const planOptions = (current) => [...new Set([...PLANS.map((p) => p.name), ...LEGACY_PLANS, current].filter(Boolean))];
 export const planDefaults = (name) => PLANS.find((p) => p.name === name) || null;

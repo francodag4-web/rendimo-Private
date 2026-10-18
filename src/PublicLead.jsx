@@ -7,7 +7,7 @@ import { Loading } from './ui/ui.jsx';
 // Formulario público para que un jugador pida plaza. No necesita cuenta.
 export default function PublicLead({ slug }) {
   const [brand, setBrand] = useState(undefined);
-  const [f, setF] = useState({ name: '', phone: '', email: '', position: '', plan: PLANS[0].name, goal: '', injuries: '', message: '', ok: false });
+  const [f, setF] = useState({ name: '', phone: '', email: '', position: '', plan: PLANS[1].name, goal: '', injuries: '', message: '', ok: false });
   const [state, setState] = useState('form'); // form | sending | done | error
   const [err, setErr] = useState('');
   useEffect(() => {

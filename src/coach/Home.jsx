@@ -100,7 +100,7 @@ export default function Home() {
           <div className="big num">{active.length}</div>
           {active.length > 0 && <div className="bars" aria-hidden="true">{planRows.map(([k, n], i) => <i key={k} style={{ width: `${(n / active.length) * 100}%`, background: shades[Math.min(i, 3)] }} />)}</div>}
           <div className="sub">{planRows.length ? planRows.map(([k, n]) => `${n} ${k}`).join(' · ') : 'Añade tu primer jugador.'}</div>
-          <div><Lnk onClick={() => go('clientes')}>Ver jugadores</Lnk></div>
+          <div className="row" style={{ gap: 14 }}><Lnk onClick={() => go('clientes')}>Ver jugadores</Lnk><Lnk onClick={() => go('planes')}>Ver planes</Lnk></div>
         </section>
 
         <section className="tile t-r" aria-label="Revisiones pendientes">
@@ -225,13 +225,13 @@ function AlertRow({ a }) {
         </span>
         <span className="row">
           <span className="pill">{KIND[a.kind]}</span>
-          <button type="button" className="pill" style={{ border: 'none', cursor: 'pointer', fontWeight: 800 }} aria-pressed={a.urgent}
+          <button type="button" className={'pill ' + (a.urgent ? 's-bad' : 's-soft')} style={{ border: 'none', cursor: 'pointer', fontWeight: 800 }} aria-pressed={a.urgent}
             title="Cambiar urgencia" onClick={() => save({ urgent: !a.urgent }, a.urgent ? 'Marcada como no urgente.' : 'Marcada como urgente.')}>
             {a.urgent ? '● Urgente' : '○ No urgente'}
           </button>
-          {a.status === 'nueva' && <span className="pill">Sin gestionar</span>}
-          {a.status === 'pendiente' && <span className="pill">{overdue ? '⚠ ' : ''}Pendiente · {fmtDate(a.action.due_date)}</span>}
-          {a.status === 'gestionada' && <span className="pill">Gestionada ✓</span>}
+          {a.status === 'nueva' && <span className="pill s-warn">Sin gestionar</span>}
+          {a.status === 'pendiente' && <span className={'pill ' + (overdue ? 's-bad' : 's-info')}>{overdue ? '⚠ ' : ''}Pendiente · {fmtDate(a.action.due_date)}</span>}
+          {a.status === 'gestionada' && <span className="pill s-ok">Gestionada ✓</span>}
         </span>
       </div>
       {form ? (
@@ -240,13 +240,13 @@ function AlertRow({ a }) {
           : save({ status: 'gestionada', note: note || null }, 'Alerta gestionada.'); }}>
           {form === 'pendiente' && <label className="row small">Para el<input type="date" required style={{ width: 'auto' }} value={date} onChange={(e) => setDate(e.target.value)} /></label>}
           <input style={{ flex: '1 1 200px' }} placeholder={form === 'pendiente' ? 'Qué vas a hacer (opcional)' : 'Qué hiciste (opcional)'} value={note} onChange={(e) => setNote(e.target.value)} />
-          <button className="btn sm" type="submit">{form === 'pendiente' ? 'Guardar pendiente' : 'Marcar gestionada'}</button>
+          <button className={'btn sm ' + (form === 'pendiente' ? 's-info' : 's-ok')} type="submit">{form === 'pendiente' ? 'Guardar pendiente' : 'Marcar gestionada'}</button>
           <button type="button" className="btn sm" onClick={() => setForm(null)}>Cancelar</button>
         </form>
       ) : (
         <div className="row">
           {a.status !== 'gestionada' && <button className="btn sm" onClick={() => setForm('pendiente')}>{a.status === 'pendiente' ? 'Cambiar fecha' : 'Dejar pendiente'}</button>}
-          {a.status !== 'gestionada' && <button className="btn sm" onClick={() => setForm('gestionada')}>Gestionada</button>}
+          {a.status !== 'gestionada' && <button className="btn sm s-ok" onClick={() => setForm('gestionada')}>✓ Gestionada</button>}
           {a.status !== 'nueva' && <button className="btn sm" onClick={reopen}>Reabrir</button>}
           {a.p.phone && <a className="wa" target="_blank" rel="noopener" href={waURL(a.p.phone, waText(a.p, WA_KIND[a.kind] || 'libre', coach))}><WAIcon /> Escribir</a>}
         </div>

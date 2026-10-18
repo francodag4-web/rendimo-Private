@@ -91,9 +91,9 @@ function PlayerList() {
 function NewPlayer() {
   const { uid, load, go, coach } = useCoach();
   const act = useAction();
-  const [f, setF] = useState({ name: '', email: '', phone: '', position: '', plan: PLANS[0].name, fee: PLANS[0].fee, fee_type: PLANS[0].type, start_date: iso(), objective: '', review_days: 14, commitment_months: 3 });
+  const [f, setF] = useState({ name: '', email: '', phone: '', position: '', plan: PLANS[1].name, fee: PLANS[1].fee, fee_type: PLANS[1].type, start_date: iso(), objective: '', review_days: 14, commitment_months: 3 });
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
-  const setPlan = (e) => { const d = planDefaults(e.target.value); setF({ ...f, plan: e.target.value, ...(d ? { fee: d.fee, fee_type: d.type } : {}) }); };
+  const setPlan = (e) => { const d = planDefaults(e.target.value); setF({ ...f, plan: e.target.value, ...(d ? { fee: d.fee, fee_type: d.type, commitment_months: d.commitment ?? '', review_days: d.review || f.review_days } : {}) }); };
   const save = (e) => {
     e.preventDefault();
     act(async () => {
@@ -539,7 +539,7 @@ function Data({ p }) {
         <label className="f">Correo<input type="email" value={f.email || ''} onChange={set('email')} required /></label>
         <label className="f">WhatsApp<input value={f.phone || ''} onChange={set('phone')} /></label>
         <label className="f">Posición<input value={f.position || ''} onChange={set('position')} /></label>
-        <label className="f">Plan<select value={f.plan || ''} onChange={(e) => { const d = planDefaults(e.target.value); setF({ ...f, plan: e.target.value, ...(d && f.fee == null ? { fee: d.fee, fee_type: d.type } : {}) }); }}>{planOptions(f.plan).map((x) => <option key={x}>{x}</option>)}</select></label>
+        <label className="f">Plan<select value={f.plan || ''} onChange={(e) => { const d = planDefaults(e.target.value); setF({ ...f, plan: e.target.value, ...(d ? { fee: d.fee, fee_type: d.type, commitment_months: d.commitment } : {}) }); }}>{planOptions(f.plan).map((x) => <option key={x}>{x}</option>)}</select></label>
         <label className="f">Importe (€)<span className="row"><input id="d-fee" inputMode="decimal" style={{ flex: 1 }} value={f.fee ?? ''} onChange={set('fee')} /><select style={{ width: 'auto' }} value={f.fee_type || 'mensual'} onChange={set('fee_type')}><option value="mensual">al mes</option><option value="unico">único</option></select></span></label>
         <label className="f">Objetivo<input id="d-obj" value={f.objective || ''} onChange={set('objective')} placeholder="Ej. Sprint 10 m < 1,80 s antes del 15/01" /></label>
         <label className="f">Club / partido<input id="d-club" value={f.club_days || ''} onChange={set('club_days')} placeholder="Ej. Mar y jue · domingo" /></label>

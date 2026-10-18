@@ -256,3 +256,10 @@ th{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--mute
 .board.four{grid-template-columns:repeat(4,minmax(0,1fr))}
 @media (max-width:1000px){.board.four{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:640px){.tile{min-height:0}.board.four{grid-template-columns:repeat(2,minmax(0,1fr))}.board.four .big{font-size:40px}}
+/* Colores con significado dentro de las tarjetas (urgente, gestionada, pendiente, WhatsApp) */
+.tile .s-bad{background:#B3261E!important;color:#fff!important;border-color:#fff!important}
+.tile .s-ok{background:#1E7B34!important;color:#fff!important;border-color:#1E7B34!important}
+.tile .s-warn{background:#F2C14E!important;color:#2A1C00!important}
+.tile .s-info{background:#1F5FA8!important;color:#fff!important;border-color:#1F5FA8!important}
+.tile .s-soft{background:rgba(255,255,255,.22)}
+.tile .wa{background:#25D366;color:#06301A;box-shadow:0 0 0 1.5px rgba(255,255,255,.7)}

@@ -11,6 +11,7 @@ import Agenda from './Agenda.jsx';
 import Settings from './Settings.jsx';
 import Leads from './Leads.jsx';
 import Payments from './Payments.jsx';
+import Plans from './Plans.jsx';
 import GlobalSearch from './GlobalSearch.jsx';
 import { commitment } from '../lib/domain.js';
 
@@ -25,6 +26,7 @@ const PAGES = [
   ['biblioteca', 'Biblioteca'],
   ['solicitudes', 'Solicitudes'],
   ['pagos', 'Pagos'],
+  ['planes', 'Planes'],
   ['ajustes', 'Marca y cuenta'],
 ];
 
@@ -150,7 +152,7 @@ export default function CoachApp({ session, onLogout, canSwitch, onSwitch }) {
   const ctx = { ...d, load, go, route, alerts, uid };
   const newLeads = (d.leads || []).filter((l) => l.status === 'activa' && !l.stage).length;
   const coach = d.coach;
-  const Page = { inicio: Home, clientes: Clients, programacion: Programs, biblioteca: Library, agenda: Agenda, ajustes: Settings, solicitudes: Leads, pagos: Payments }[route.page];
+  const Page = { inicio: Home, clientes: Clients, programacion: Programs, biblioteca: Library, agenda: Agenda, ajustes: Settings, solicitudes: Leads, pagos: Payments, planes: Plans }[route.page];
   const badge = { inicio: openAlerts, agenda: due, solicitudes: newLeads };
 
   const Brand = (

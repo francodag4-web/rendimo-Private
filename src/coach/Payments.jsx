@@ -6,6 +6,7 @@ import { useAction, useToast, Tabs, Empty, WAIcon } from '../ui/ui.jsx';
 import { monthKey, monthName, feeText, commitment, money } from '../lib/domain.js';
 import { waText } from './Home.jsx';
 import Flag from './Flag.jsx';
+import { AssignPlan } from './Plans.jsx';
 
 const shift = (key, n) => { const [y, m] = key.split('-').map(Number); const d = new Date(y, m - 1 + n, 1); return monthKey(d); };
 
@@ -71,8 +72,15 @@ export default function Payments() {
             })}</tbody>
           </table>
         </div>
-      ) : <Empty>{rows.length ? 'Nadie en este filtro.' : 'Nadie con importe este mes. Pon el importe en la ficha de cada jugador (pestaña Datos).'}</Empty>}
-      {noFee.length > 0 && <p className="muted small">Sin importe (no salen aquí): {noFee.map((p) => p.name).join(', ')}.</p>}
+      ) : <Empty>{rows.length ? 'Nadie en este filtro.' : 'Nadie con plan este mes. Asígnalo abajo, en «Sin plan asignado».'}</Empty>}
+      {noFee.length > 0 && (
+        <section className="panel stack">
+          <div><h3>Sin plan asignado</h3><p className="muted small">Elige su plan y se pone solo el importe, el compromiso y las revisiones. Después aparece arriba para marcar el pago.</p></div>
+          <ul className="list">{noFee.map((p) => (
+            <li key={p.id}><span><b>{p.name}</b><Flag p={p} sm /> <span className="muted small">· {p.plan || 'sin plan'}</span></span><AssignPlan p={p} label="Asignar plan" /></li>
+          ))}</ul>
+        </section>
+      )}
     </>
   );
 }
