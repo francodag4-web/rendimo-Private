@@ -345,3 +345,26 @@ th{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--mute
 .ptabs button:focus-visible .ic{outline:2px solid var(--brand);outline-offset:2px}
 .pwrap{padding-bottom:130px}
 .timer{bottom:calc(96px + env(safe-area-inset-bottom,0))}
+/* Barra inferior del entrenador (móvil) */
+.cnav{display:none}
+@media (max-width:860px){
+  .bottomnav{display:none!important}
+  .cnav{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(10px + env(safe-area-inset-bottom,0));z-index:40;width:min(560px,calc(100vw - 20px));display:flex;align-items:flex-end;gap:2px;padding:6px 8px;background:color-mix(in srgb,var(--surface) 92%,transparent);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid var(--line);border-radius:22px;box-shadow:0 12px 30px -12px rgba(0,0,0,.35)}
+  .cnav button{all:unset;cursor:pointer;flex:1 1 0;display:grid;justify-items:center;gap:3px;padding:6px 0 4px;color:var(--muted);position:relative}
+  .cnav .ic,.msheet .ic{position:relative;display:grid;place-items:center;width:40px;height:30px;border-radius:999px;transition:background .15s}
+  .cnav .lbl{font-family:var(--display);font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase}
+  .cnav button[aria-current="page"],.cnav button[aria-expanded="true"]{color:var(--ink)}
+  .cnav button[aria-current="page"] .ic,.cnav button[aria-expanded="true"] .ic{background:color-mix(in srgb,var(--brand) 22%,transparent);color:var(--brand-text)}
+  .cnav button.mid .ic{width:58px;height:58px;margin-top:-30px;border-radius:50%;background:var(--brand);color:var(--brand-ink)!important;box-shadow:0 0 0 5px var(--bg),0 10px 22px -8px rgba(0,0,0,.45)}
+  .cnav button.mid .lbl{color:var(--ink)}
+  .cnav button:focus-visible .ic{outline:2px solid var(--brand);outline-offset:2px}
+  .nb{position:absolute;top:-4px;right:-2px;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:var(--t-orange);color:#fff;font:700 11px/18px var(--body);text-align:center;box-shadow:0 0 0 2px var(--surface)}
+  .cnav button.mid .nb{top:0;right:0}
+  .msheet-bg{position:fixed;inset:0;z-index:38;background:rgba(0,0,0,.35)}
+  .msheet{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(96px + env(safe-area-inset-bottom,0));z-index:39;width:min(560px,calc(100vw - 20px));background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:14px;display:grid;gap:12px;box-shadow:0 20px 40px -16px rgba(0,0,0,.45)}
+  .msheet-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+  .msheet-grid button{all:unset;cursor:pointer;display:grid;justify-items:center;gap:4px;padding:10px 4px;border-radius:14px;background:var(--soft);font-weight:700;font-size:13px;text-align:center}
+  .msheet-grid button[aria-current="page"]{background:color-mix(in srgb,var(--brand) 22%,transparent);color:var(--brand-text)}
+  .main{padding-bottom:120px}
+  .toasts{bottom:calc(100px + env(safe-area-inset-bottom,0))}
+}

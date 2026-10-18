@@ -14,6 +14,7 @@ import Payments from './Payments.jsx';
 import Plans from './Plans.jsx';
 import GlobalSearch from './GlobalSearch.jsx';
 import { commitment, setPlans } from '../lib/domain.js';
+import { MobileNav } from './MobileNav.jsx';
 
 const Ctx = createContext(null);
 export const useCoach = () => useContext(Ctx);
@@ -189,13 +190,7 @@ export default function CoachApp({ session, onLogout, canSwitch, onSwitch }) {
           <div className="coachtop"><GlobalSearch /></div>
           <Page />
         </main>
-        <nav className="bottomnav" aria-label="Secciones">
-          {PAGES.map(([k, l]) => (
-            <button key={k} type="button" aria-current={route.page === k ? 'page' : undefined} onClick={() => go(k)}>
-              {l.split(' ')[0]}{badge[k] ? ` (${badge[k]})` : ''}
-            </button>
-          ))}
-        </nav>
+        <MobileNav route={route} go={go} badge={badge} canSwitch={canSwitch} onSwitch={onSwitch} onLogout={onLogout} />
       </div>
     </Ctx.Provider>
   );
