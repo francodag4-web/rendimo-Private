@@ -21,6 +21,7 @@ export default function Login() {
     if (error) {
       setErr(/Invalid login/i.test(error.message) ? 'Correo o contraseña incorrectos.'
         : /rate limit|security purposes/i.test(error.message) ? 'Has pedido varios enlaces seguidos. Espera un minuto y vuelve a probar.'
+        : /sending.*email/i.test(error.message) ? 'No hemos podido enviar el correo ahora mismo. Prueba en unos minutos o avisa a tu entrenador.'
         : error.message);
       return;
     }
