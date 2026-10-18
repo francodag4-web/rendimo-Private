@@ -11,7 +11,7 @@ Vite + React, Supabase (Auth, Postgres con seguridad por filas, región UE) y Cl
 ## Puesta en marcha
 1. En Supabase → SQL Editor, ejecuta `supabase/schema.sql`.
 2. Autoriza a los entrenadores: `insert into public.coach_allowlist (email) values ('correo@ejemplo.com');`
-3. En Cloudflare Pages: preset **Vite**, comando `npm run build`, carpeta `dist`, y las variables de `.env.example`.
+3. En Cloudflare (Workers & Pages, conectado a este repositorio): build `npm run build` y deploy `npx wrangler deploy`. La configuración está en `wrangler.jsonc`.
 
 ## Desarrollo
 ```

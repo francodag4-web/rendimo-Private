@@ -1,7 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
 
-const url = import.meta.env.VITE_SUPABASE_URL;
-const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+// Valores públicos por defecto (la clave publishable está pensada para ir en el navegador;
+// la seguridad la ponen las políticas de la base de datos). Se pueden sobrescribir con variables.
+const url = import.meta.env.VITE_SUPABASE_URL || 'https://ddxrxkavvzwdofiehejt.supabase.co';
+const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_MLPGjdm461v16TbqyChxBw_JTAywvyG';
 
 if (!url || !key) {
   // Mensaje claro si faltan las variables al desplegar
