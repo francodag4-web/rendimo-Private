@@ -34,3 +34,13 @@ function traducir(m = '') {
   if (/Failed to fetch|NetworkError/i.test(m)) return 'Sin conexión. Revisa internet y vuelve a probar.';
   return m;
 }
+
+// Trae todas las filas (la API devuelve como máximo 1000 por petición)
+export async function fetchAll(build, size = 1000) {
+  const out = [];
+  for (let from = 0; ; from += size) {
+    const rows = await q(build().range(from, from + size - 1));
+    out.push(...rows);
+    if (rows.length < size) return out;
+  }
+}

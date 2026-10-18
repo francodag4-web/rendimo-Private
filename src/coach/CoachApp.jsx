@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { supabase, q, PLATFORM } from '../lib/supabase.js';
+import { supabase, q, PLATFORM, fetchAll } from '../lib/supabase.js';
 import { applyBrand } from '../App.jsx';
 import { iso, addDays, wellness } from '../lib/util.js';
 import { Loading } from '../ui/ui.jsx';
@@ -49,7 +49,7 @@ export default function CoachApp({ session, onLogout, canSwitch, onSwitch }) {
     const jobs = {
       coach: () => supabase.from('coaches').select('*').eq('id', uid).single(),
       players: () => supabase.from('players').select('*').order('name'),
-      exercises: () => supabase.from('exercises').select('*').order('name'),
+      exercises: () => ({ then: (ok, ko) => fetchAll(() => supabase.from('exercises').select('*').order('name').order('id')).then((data) => ({ data, error: null })).then(ok, ko) }),
       programs: () => supabase.from('programs').select('*').order('updated_at', { ascending: false }),
       tasks: () => supabase.from('tasks').select('*').order('due_at'),
       notes: () => supabase.from('notes').select('*').order('created_at', { ascending: false }),

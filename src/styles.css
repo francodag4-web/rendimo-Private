@@ -167,3 +167,4 @@ th{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--mute
 .kv{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:6px 14px;margin:0;font-size:15px}
 .kv dt{color:var(--muted)}
 .kv dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.clamp{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;max-width:60ch}

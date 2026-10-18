@@ -64,9 +64,11 @@ create table if not exists public.exercises (
   secondary      text[] not null default '{}',
   video_url      text,
   notes          text,
+  category       text,
   created_at     timestamptz not null default now(),
   unique (coach_id, name)
 );
+alter table public.exercises add column if not exists category text;
 
 -- Programas: plantilla (player_id null) o copia asignada a un jugador
 create table if not exists public.programs (

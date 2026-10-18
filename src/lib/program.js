@@ -3,7 +3,7 @@
 //     packs: [ { id, type, rounds, notes, items: [ { id, exercise, sets, reps, load, rest, notes } ] } ] } ] } ] } ] }
 import { uid, addDays, parseISO, daysBetween, dow, iso } from './util.js';
 
-export const PACK_TYPES = ['Movilidad', 'Activación', 'Fuerza', 'Potencia', 'Velocidad', 'Pliometría', 'Core', 'Prevención', 'Acondicionamiento', 'Vuelta a la calma'];
+export const PACK_TYPES = ['Movilidad', 'Activación', 'Fuerza', 'Potencia', 'Velocidad', 'Cambio de dirección', 'Pliometría', 'Core', 'Prevención', 'Readaptación', 'Neurocognitivo', 'Acondicionamiento', 'Valoración', 'Vuelta a la calma'];
 
 export const emptyItem = () => ({ id: uid(), exercise: '', sets: '', reps: '', load: '', rest: '', notes: '' });
 export const emptyPack = (type = 'Fuerza') => ({ id: uid(), type, rounds: '', notes: '', items: [emptyItem()] });

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { supabase, q, PLATFORM } from '../lib/supabase.js';
+import { supabase, q, PLATFORM, fetchAll } from '../lib/supabase.js';
 import { applyBrand } from '../App.jsx';
 import { iso, addDays, mondayOf, dow, DAYS, fmtDate, wellness, waURL, parseISO } from '../lib/util.js';
 import { sessionsOfWeek, calendarWeekIdx, totalWeeks, label } from '../lib/program.js';
@@ -25,7 +25,7 @@ export default function PlayerApp({ player, session, onLogout, canSwitch, onSwit
       q(supabase.from('programs').select('*').eq('player_id', player.id).order('start_date', { ascending: false })),
       q(supabase.from('checkins').select('*').eq('player_id', player.id).gte('date', since).order('date')),
       q(supabase.from('session_logs').select('*').eq('player_id', player.id).gte('date', since).order('date')),
-      q(supabase.from('exercises').select('name,video_url,notes')),
+      fetchAll(() => supabase.from('exercises').select('name,video_url,notes').order('id')),
     ]);
     setD({ coach, programs, checkins, logs, exercises });
   }, [player.id, player.coach_id]);
@@ -283,6 +283,7 @@ function SessionCard({ ctx, s, open: startOpen }) {
                       </div>
                       <span className="small">{[it.sets && `${it.sets} series`, it.reps && `${it.reps} reps`, it.load && `carga ${it.load}`, it.rest && `descanso ${it.rest}`].filter(Boolean).join(' · ')}</span>
                       {it.notes && <span className="small muted">{it.notes}</span>}
+                      {v?.notes && <details className="small"><summary>Cómo hacerlo</summary><p className="muted" style={{ whiteSpace: 'pre-line', marginTop: 4 }}>{v.notes.split('\nMás vídeos:')[0]}</p></details>}
                       <div className="row">
                         {v?.video_url && <a className="btn sm" href={v.video_url} target="_blank" rel="noopener">▶ Vídeo</a>}
                         <input style={{ width: 130 }} placeholder="Carga usada" aria-label={'Carga usada en ' + it.exercise} value={st.load || ''} onChange={(e) => setDone({ ...done, [it.id]: { ...st, load: e.target.value } })} />
