@@ -313,3 +313,27 @@ create policy tasks_coach on public.tasks for all to authenticated
   using (coach_id = auth.uid())
   with check (coach_id = auth.uid()
               and (player_id is null or public.coach_of(player_id) = auth.uid()));
+
+-- ---------- Alertas (añadido) ----------
+-- Seguimiento de alertas: sin gestionar / pendiente (con fecha) / gestionada, y urgencia
+create table if not exists public.alert_actions (
+  id         uuid primary key default gen_random_uuid(),
+  coach_id   uuid not null references public.coaches(id) on delete cascade,
+  player_id  uuid not null references public.players(id) on delete cascade,
+  alert_key  text not null,
+  status     text not null default 'pendiente' check (status in ('pendiente','gestionada')),
+  urgent     boolean not null default false,
+  due_date   date,
+  note       text,
+  updated_at timestamptz not null default now(),
+  unique (coach_id, player_id, alert_key)
+);
+grant select, insert, update, delete on public.alert_actions to authenticated;
+alter table public.alert_actions enable row level security;
+drop policy if exists alert_actions_coach on public.alert_actions;
+create policy alert_actions_coach on public.alert_actions for all to authenticated
+  using (coach_id = auth.uid())
+  with check (coach_id = auth.uid() and public.coach_of(player_id) = auth.uid());
+drop trigger if exists alert_actions_touch on public.alert_actions;
+create trigger alert_actions_touch before update on public.alert_actions
+  for each row execute function public.touch_updated_at();

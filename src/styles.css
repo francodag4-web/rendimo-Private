@@ -168,3 +168,6 @@ th{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--mute
 .kv dt{color:var(--muted)}
 .kv dd{margin:0;min-width:0;overflow-wrap:anywhere}
 .clamp{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;max-width:60ch}
+.list.alerts li{flex-direction:column;align-items:stretch;gap:8px}
+.list.alerts li.urgent{box-shadow:inset 3px 0 0 var(--bad)}
+.cal .ev.alert{background:color-mix(in srgb,var(--bad) 20%,transparent)}
