@@ -3,7 +3,7 @@ import { useCoach } from './CoachApp.jsx';
 import { supabase, q } from '../lib/supabase.js';
 import { iso, addDays, parseISO, waURL } from '../lib/util.js';
 import { useAction, useToast, Tabs, Empty, WAIcon } from '../ui/ui.jsx';
-import { LEAD_STAGES, DISCARD_REASONS, ago, planOptions, planDefaults, planPatch, PLANS } from '../lib/domain.js';
+import { LEAD_STAGES, DISCARD_REASONS, ago, planOptions, planDefaults, planPatch, PLANS, defaultPlan } from '../lib/domain.js';
 import { waText } from './Home.jsx';
 
 const toLocal = (ts) => { if (!ts) return ''; const d = new Date(ts); const z = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}T${z(d.getHours())}:${z(d.getMinutes())}`; };
@@ -50,7 +50,7 @@ export default function Leads() {
 function NewLead({ onDone }) {
   const { uid, load } = useCoach();
   const act = useAction();
-  const [f, setF] = useState({ name: '', phone: '', email: '', position: '', plan: PLANS[1].name, goal: '', injuries: '', message: '' });
+  const [f, setF] = useState({ name: '', phone: '', email: '', position: '', plan: defaultPlan().name, goal: '', injuries: '', message: '' });
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   const save = (e) => {
     e.preventDefault();
@@ -94,7 +94,7 @@ function LeadCard({ l }) {
     const today = iso();
     const row = await q(supabase.from('players').insert({
       coach_id: uid, name: l.name, email: mail, phone: l.phone, position: l.position, objective: l.goal, start_date: today,
-      ...planPatch(l.plan || PLANS[1].name), next_review: d?.review === null ? null : iso(addDays(parseISO(today), d?.review || 14)),
+      ...planPatch(l.plan || defaultPlan().name), next_review: d?.review === null ? null : iso(addDays(parseISO(today), d?.review || 14)),
     }).select().single());
     const txt = [l.goal && `Objetivo: ${l.goal}`, l.injuries && `Lesiones: ${l.injuries}`, l.message && `Mensaje: ${l.message}`].filter(Boolean).join(' · ');
     await q(supabase.from('evolution').insert({ coach_id: uid, player_id: row.id, category: 'valor', text: `Alta desde solicitud.${txt ? ' ' + txt : ''}` }));

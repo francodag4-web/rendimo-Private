@@ -13,7 +13,7 @@ import Leads from './Leads.jsx';
 import Payments from './Payments.jsx';
 import Plans from './Plans.jsx';
 import GlobalSearch from './GlobalSearch.jsx';
-import { commitment } from '../lib/domain.js';
+import { commitment, setPlans } from '../lib/domain.js';
 
 const Ctx = createContext(null);
 export const useCoach = () => useContext(Ctx);
@@ -74,6 +74,7 @@ export default function CoachApp({ session, onLogout, canSwitch, onSwitch }) {
       payments: () => soft(supabase.from('payments').select('*')),
       leads: () => soft(supabase.from('leads').select('*').order('created_at', { ascending: false })),
       blocks: () => soft(supabase.from('saved_blocks').select('*').order('name')),
+      plans: () => soft(supabase.from('plans').select('*').order('sort').order('fee')),
       weekNotes: () => soft(supabase.from('week_notes').select('*').gte('week', iso(addDays(new Date(), -35)))),
     };
     const keys = only ? [].concat(only) : Object.keys(jobs);
@@ -150,6 +151,7 @@ export default function CoachApp({ session, onLogout, canSwitch, onSwitch }) {
   if (err && !d) return <div className="center"><div className="card"><h2>Error al cargar</h2><p>{err}</p><button className="btn" onClick={() => load()}>Reintentar</button></div></div>;
   if (!d?.coach) return <Loading />;
 
+  setPlans(d.plans);
   const ctx = { ...d, load, go, route, alerts, uid };
   const newLeads = (d.leads || []).filter((l) => l.status === 'activa' && !l.stage).length;
   const coach = d.coach;

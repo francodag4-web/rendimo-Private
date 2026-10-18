@@ -1,17 +1,20 @@
 import React, { useEffect, useState } from 'react';
 import { supabase, PLATFORM } from './lib/supabase.js';
 import { applyBrand } from './App.jsx';
-import { PLANS } from './lib/domain.js';
+import { PLANS, defaultPlan, setPlans, money } from './lib/domain.js';
 import { Loading } from './ui/ui.jsx';
+import PlanCard from './ui/PlanCard.jsx';
 
 // Formulario público para que un jugador pida plaza. No necesita cuenta.
 export default function PublicLead({ slug }) {
   const [brand, setBrand] = useState(undefined);
-  const [f, setF] = useState({ name: '', phone: '', email: '', position: '', plan: PLANS[1].name, goal: '', injuries: '', message: '', ok: false });
+  const [f, setF] = useState({ name: '', phone: '', email: '', position: '', plan: defaultPlan().name, goal: '', injuries: '', message: '', ok: false });
   const [state, setState] = useState('form'); // form | sending | done | error
   const [err, setErr] = useState('');
   useEffect(() => {
-    supabase.rpc('public_brand', { coach_slug: slug }).then(({ data }) => {
+    Promise.all([supabase.rpc('public_brand', { coach_slug: slug }), supabase.rpc('public_plans', { coach_slug: slug })]).then(([{ data }, pl]) => {
+      setPlans(pl.error ? [] : pl.data);
+      setF((x) => ({ ...x, plan: defaultPlan().name }));
       setBrand(data || null);
       if (data) { applyBrand(data.color); document.title = `Solicitud · ${data.brand_name}`; }
     });
@@ -48,8 +51,20 @@ export default function PublicLead({ slug }) {
               <label className="f">WhatsApp<input id="pl-phone" required inputMode="tel" maxLength={40} value={f.phone} onChange={set('phone')} placeholder="+34 600 111 222" /></label>
               <label className="f">Correo<input id="pl-email" type="email" maxLength={160} value={f.email} onChange={set('email')} /></label>
               <label className="f">Posición<input id="pl-pos" maxLength={80} value={f.position} onChange={set('position')} placeholder="Ej. Apertura, flanker…" /></label>
-              <label className="f">Qué te interesa<select id="pl-plan" value={f.plan} onChange={set('plan')}>{PLANS.map((p) => <option key={p.name}>{p.name}</option>)}</select></label>
             </div>
+            <fieldset className="planpick">
+              <legend>Qué plan te interesa</legend>
+              {PLANS.map((p) => (
+                <PlanCard key={p.name} plan={p} as="label" className={f.plan === p.name ? 'on' : ''}>
+                  <input type="radio" name="plan" value={p.name} checked={f.plan === p.name} onChange={set('plan')} />
+                </PlanCard>
+              ))}
+              <label className={'tile t-s' + (f.plan === 'Aún no lo sé' ? ' on' : '')}>
+                <input type="radio" name="plan" value="Aún no lo sé" checked={f.plan === 'Aún no lo sé'} onChange={set('plan')} />
+                <b className="pname">Aún no lo sé</b><span className="sub">Lo vemos juntos en la videollamada.</span>
+              </label>
+              {PLANS.some((p) => p.commitment) && <p className="muted small">Los planes con compromiso de 3 meses lo tienen porque es el tiempo mínimo para que las mejoras de fuerza y velocidad se noten en los tests.</p>}
+            </fieldset>
             <label className="f">Tu objetivo<input id="pl-goal" maxLength={300} value={f.goal} onChange={set('goal')} placeholder="Ej. Ganar velocidad para la temporada" /></label>
             <label className="f">Lesiones (si tienes alguna)<input id="pl-inj" maxLength={500} value={f.injuries} onChange={set('injuries')} /></label>
             <label className="f">Algo más<textarea maxLength={1500} value={f.message} onChange={set('message')} /></label>

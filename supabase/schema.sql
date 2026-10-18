@@ -582,3 +582,61 @@ drop policy if exists club_events_rw on public.club_events;
 create policy club_events_rw on public.club_events for all to authenticated
   using (player_id = public.my_player_id() or public.coach_of(player_id) = auth.uid())
   with check (player_id = public.my_player_id() or public.coach_of(player_id) = auth.uid());
+
+
+-- ===== Planes y ofertas editables (10-planes.sql) =====
+-- Rendimo · 10: planes y ofertas editables por el entrenador
+-- Se puede ejecutar varias veces sin problema.
+
+create table if not exists public.plans (
+  id                uuid primary key default gen_random_uuid(),
+  coach_id          uuid not null references public.coaches(id) on delete cascade,
+  name              text not null check (length(name) between 1 and 60),
+  fee               numeric(8,2) not null check (fee >= 0),
+  fee_type          text not null default 'mensual' check (fee_type in ('mensual','unico')),
+  commitment_months smallint check (commitment_months between 0 and 36),
+  review_days       smallint check (review_days between 1 and 90),
+  pitch             text check (length(pitch) <= 300),
+  features          text[] not null default '{}',
+  tag               text check (length(tag) <= 40),
+  color             text not null default 't-g',
+  is_offer          boolean not null default false,
+  old_fee           numeric(8,2),           -- precio normal (sale tachado en las ofertas)
+  valid_until       date,                   -- la oferta deja de verse después de esta fecha
+  active            boolean not null default true,
+  sort              smallint not null default 0,
+  created_at        timestamptz not null default now(),
+  unique (coach_id, name)
+);
+alter table public.plans enable row level security;
+grant select, insert, update, delete on public.plans to authenticated;
+
+drop policy if exists plans_coach on public.plans;
+create policy plans_coach on public.plans for all to authenticated
+  using (coach_id = auth.uid()) with check (coach_id = auth.uid());
+-- El jugador ve los planes activos de su entrenador
+drop policy if exists plans_player on public.plans;
+create policy plans_player on public.plans for select to authenticated
+  using (active and coach_id = public.coach_of(public.my_player_id()));
+
+-- Planes activos para el formulario público (sin cuenta)
+create or replace function public.public_plans(coach_slug text) returns jsonb
+language sql stable security definer set search_path = '' as $$
+  select coalesce(jsonb_agg(to_jsonb(p) - 'coach_id' - 'created_at' order by p.sort, p.fee), '[]'::jsonb)
+  from public.plans p join public.coaches c on c.id = p.coach_id
+  where c.slug = lower(coach_slug) and p.active and (p.valid_until is null or p.valid_until >= current_date);
+$$;
+grant execute on function public.public_plans(text) to anon, authenticated;
+
+-- Los tres planes de partida para cada entrenador (no toca los que ya existan)
+insert into public.plans (coach_id, name, fee, fee_type, commitment_months, review_days, pitch, features, tag, color, sort)
+select c.id, v.name, v.fee, v.fee_type, v.cm, v.rd, v.pitch, v.features, v.tag, v.color, v.sort
+from public.coaches c cross join (values
+  ('Programa pretemporada', 39, 'unico', null::smallint, null::smallint, 'Para entrenar por tu cuenta con un plan serio.',
+    array['8 semanas de fuerza, velocidad y resistencia','Vídeo de cada ejercicio','Tests de inicio y final para comprobar el progreso'], 'Sin seguimiento', 't-a', 1),
+  ('Coaching rugby', 89, 'mensual', 3::smallint, 14::smallint, 'Plan personalizado y seguimiento para rendir en el campo.',
+    array['Valoración y tests iniciales','Plan adaptado a su posición y calendario del club','Ajuste de cargas cada dos semanas','WhatsApp para dudas','Re-test al final de cada bloque'], 'El más elegido', 't-g', 2),
+  ('Readaptación', 149, 'mensual', 3::smallint, 7::smallint, 'Vuelta al juego tras lesión, por fases y con criterios.',
+    array['Todo lo del coaching rugby','Revisión semanal','Criterios objetivos para volver al contacto','Coordinación con su fisio o médico si hace falta'], 'Plazas limitadas', 't-r', 3)
+) as v(name, fee, fee_type, cm, rd, pitch, features, tag, color, sort)
+on conflict (coach_id, name) do nothing;

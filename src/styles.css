@@ -289,22 +289,12 @@ th{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--mute
 .week div.day{cursor:default;opacity:.75}
 .week .day[aria-expanded="true"]{border-color:var(--ink)}
 .chip.warn{color:var(--warn)} .chip:not(.ok):not(.warn):not(.bad){color:var(--muted)}
-.ptabs{position:fixed;left:0;right:0;bottom:0;z-index:30;display:flex;justify-content:center;background:var(--surface);border-top:1px solid var(--line);padding:6px 6px calc(6px + env(safe-area-inset-bottom,0))}
-.ptabs button{all:unset;cursor:pointer;flex:1 1 0;max-width:120px;display:grid;justify-items:center;gap:2px;font-size:12px;font-weight:700;color:var(--muted);padding:6px 2px;border-radius:10px}
-.ptabs button .ic{font-size:17px;line-height:1}
-.ptabs button[aria-selected="true"]{color:var(--ink);background:var(--soft)}
-.ptabs button[aria-selected="true"] .ic{color:var(--brand-text)}
-.ptabs button.due .ic{color:var(--t-orange)}
-.ptabs button:focus-visible{outline:2px solid var(--brand)}
 .timer{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(74px + env(safe-area-inset-bottom,0));z-index:40;width:min(600px,calc(100vw - 24px));display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 14px;border-radius:14px;background:var(--t-teal);color:#fff;box-shadow:0 10px 30px -10px rgba(0,0,0,.5)}
 .timer b{font-family:var(--display);font-size:30px}
 .timer .btn{background:transparent;color:#fff;border-color:rgba(255,255,255,.6)}
 .timer.doneT{background:var(--t-green)}
 .grid2.keep2{grid-template-columns:repeat(2,minmax(0,1fr))}
 .pwrap{padding-bottom:110px}
-.ptabs button.mid{flex:1.25 1 0}
-.ptabs button.mid .ic{display:grid;place-items:center;width:46px;height:46px;margin-top:-22px;border-radius:50%;background:var(--brand);color:var(--brand-ink)!important;font-size:20px;box-shadow:0 0 0 5px var(--surface)}
-.ptabs button.mid[aria-selected="true"]{background:transparent}
 .paychip{justify-self:start;align-self:flex-start;font-weight:800;font-size:14px;padding:5px 12px;border-radius:999px;background:#fff}
 .paychip.ok{color:#1E7B34}.paychip.bad{color:#B3261E}
 .hero .btn.ghostw{background:transparent;color:inherit;border-color:rgba(255,255,255,.6)}
@@ -324,3 +314,34 @@ th{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--mute
 .wsd{display:grid;gap:4px;align-content:start;padding:8px;border-radius:10px;background:var(--soft);min-width:0;font-size:13px}
 .wsd.c{box-shadow:inset 0 3px 0 var(--t-blue)}.wsd.m{box-shadow:inset 0 3px 0 var(--t-red)}
 @media (max-width:760px){.weekstrip{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.planpick{border:none;padding:0;margin:0;display:grid;gap:10px}
+.planpick legend{font-size:13px;font-weight:600;color:var(--muted);margin-bottom:6px;padding:0}
+.planpick .tile{cursor:pointer;min-height:0;gap:6px;position:relative;opacity:.9;transition:transform .12s,box-shadow .12s}
+.planpick .tile input{position:absolute;opacity:0;pointer-events:none}
+.planpick .tile.on{opacity:1;box-shadow:0 0 0 3px var(--surface),0 0 0 6px var(--ink)}
+.planpick .tile:has(input:focus-visible){outline:3px solid var(--ink);outline-offset:3px}
+.planpick .pname{font-family:var(--display);text-transform:uppercase;letter-spacing:.06em;font-size:16px}
+.planpick .price{font-family:var(--display);font-size:34px;font-weight:700;line-height:1}
+.planpick .price small{font-size:16px;font-weight:600}
+.planpick ul{font-size:14px}
+.plancard .pname{font-family:var(--display);text-transform:uppercase;letter-spacing:.06em;font-size:16px}
+.plancard .price{font-family:var(--display);font-size:38px;font-weight:700;line-height:1}
+.plancard .price small{font-size:16px;font-weight:600}
+.plancard .price .old{font-size:20px;opacity:.75;margin-right:8px;font-weight:600}
+.plancard .until{justify-self:start;align-self:flex-start;font-size:12px;font-weight:800;background:#fff;color:#1b1b1b;border-radius:999px;padding:3px 10px}
+.plancard.offer{background-image:repeating-linear-gradient(135deg,rgba(255,255,255,.07) 0 12px,transparent 12px 24px)}
+
+/* Barra inferior del jugador: flotante, redondeada, con «Hoy» en el centro */
+.ptabs{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(10px + env(safe-area-inset-bottom,0));z-index:30;width:min(560px,calc(100vw - 20px));display:flex;align-items:flex-end;justify-content:space-between;gap:2px;padding:6px 8px;background:color-mix(in srgb,var(--surface) 92%,transparent);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid var(--line);border-radius:22px;box-shadow:0 12px 30px -12px rgba(0,0,0,.35)}
+.ptabs button{all:unset;cursor:pointer;flex:1 1 0;display:grid;justify-items:center;gap:3px;padding:6px 0 4px;border-radius:14px;color:var(--muted);position:relative}
+.ptabs .ic{display:grid;place-items:center;width:40px;height:30px;border-radius:999px;transition:background .15s,color .15s}
+.ptabs .lbl{font-family:var(--display);font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase}
+.ptabs button[aria-selected="true"]{color:var(--ink)}
+.ptabs button[aria-selected="true"] .ic{background:color-mix(in srgb,var(--brand) 22%,transparent);color:var(--brand-text)}
+.ptabs button.due:not(.mid) .ic::after{content:"";position:absolute;top:6px;right:calc(50% - 18px);width:9px;height:9px;border-radius:50%;background:var(--t-orange);box-shadow:0 0 0 2px var(--surface)}
+.ptabs button.mid .ic{width:58px;height:58px;margin-top:-30px;border-radius:50%;background:var(--brand);color:var(--brand-ink);box-shadow:0 0 0 5px var(--bg),0 10px 22px -8px rgba(0,0,0,.45)}
+.ptabs button.mid[aria-selected="true"] .ic{background:var(--brand);color:var(--brand-ink);transform:scale(1.04)}
+.ptabs button.mid .lbl{color:var(--ink)}
+.ptabs button:focus-visible .ic{outline:2px solid var(--brand);outline-offset:2px}
+.pwrap{padding-bottom:130px}
+.timer{bottom:calc(96px + env(safe-area-inset-bottom,0))}

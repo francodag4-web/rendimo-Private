@@ -6,7 +6,7 @@ import { useAction, useToast, Tabs, Empty, Bars, Line, WAIcon } from '../ui/ui.j
 import { waText } from './Home.jsx';
 import { calendarWeekIdx, totalWeeks } from '../lib/program.js';
 import {
-  PLANS, planOptions, planDefaults, feeText, commitment, reviewInfo, REVIEW_OPTIONS, SCREENING, wellLevel, monthKey,
+  PLANS, defaultPlan, planOptions, planDefaults, feeText, commitment, reviewInfo, REVIEW_OPTIONS, SCREENING, wellLevel, monthKey,
   TEST_PRESETS, presetOf, fmtNum, testValue, asym, testSummary, severity, INJ_STATUS, SIDES, ZONES, zoneName,
   FLAGS, EVO_CATS, evoLabel, isRecord,
 } from '../lib/domain.js';
@@ -95,7 +95,7 @@ function PlayerList() {
 function NewPlayer() {
   const { uid, load, go, coach } = useCoach();
   const act = useAction();
-  const [f, setF] = useState({ name: '', email: '', phone: '', position: '', plan: PLANS[1].name, fee: PLANS[1].fee, fee_type: PLANS[1].type, start_date: iso(), objective: '', review_days: 14, commitment_months: 3 });
+  const [f, setF] = useState({ name: '', email: '', phone: '', position: '', plan: defaultPlan().name, fee: defaultPlan().fee, fee_type: defaultPlan().type, start_date: iso(), objective: '', review_days: 14, commitment_months: 3 });
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   const setPlan = (e) => { const d = planDefaults(e.target.value); setF({ ...f, plan: e.target.value, ...(d ? { fee: d.fee, fee_type: d.type, commitment_months: d.commitment ?? '', review_days: d.review || f.review_days } : {}) }); };
   const save = (e) => {

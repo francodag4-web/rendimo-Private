@@ -1,9 +1,10 @@
-import { testSummary, fmtNum, testValue, PLANS, money, commitment, wellLevel } from '../lib/domain.js';
+import { testSummary, fmtNum, testValue, PLANS, money, commitment, wellLevel, setPlans, feeLabel } from '../lib/domain.js';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase, q, PLATFORM, fetchAll } from '../lib/supabase.js';
 import { applyBrand } from '../App.jsx';
 import { useClub, clubDay, matchText } from '../lib/club.js';
 import ClubEditor from '../ui/ClubEditor.jsx';
+import PlanCard from '../ui/PlanCard.jsx';
 import { iso, addDays, mondayOf, dow, DAYS, fmtDate, wellness, waURL, parseISO } from '../lib/util.js';
 import { sessionsOfWeek, calendarWeekIdx, totalWeeks, label } from '../lib/program.js';
 import { useAction, Tabs, Empty, Loading, Bars, Line, WAIcon } from '../ui/ui.jsx';
@@ -25,7 +26,7 @@ export default function PlayerApp({ player, session, onLogout, canSwitch, onSwit
   const load = useCallback(async () => {
     const since = iso(addDays(new Date(), -90));
     const soft = (b) => b.then(({ data }) => data || []);
-    const [coach, programs, checkins, logs, exercises, tests, payments, weekNotes] = await Promise.all([
+    const [coach, programs, checkins, logs, exercises, tests, payments, weekNotes, plans] = await Promise.all([
       q(supabase.from('coaches').select('*').eq('id', player.coach_id).limit(1)).then((r) => r[0] || null),
       q(supabase.from('programs').select('*').eq('player_id', player.id).order('start_date', { ascending: false })),
       q(supabase.from('checkins').select('*').eq('player_id', player.id).gte('date', since).order('date')),
@@ -34,8 +35,10 @@ export default function PlayerApp({ player, session, onLogout, canSwitch, onSwit
       soft(supabase.from('tests').select('*').eq('player_id', player.id).order('date').order('created_at')),
       soft(supabase.from('payments').select('*').eq('player_id', player.id)),
       soft(supabase.from('week_notes').select('*').eq('player_id', player.id).order('week', { ascending: false }).limit(4)),
+      soft(supabase.from('plans').select('*').eq('coach_id', player.coach_id)),
     ]);
-    setD({ coach, programs, checkins, logs, exercises, tests, payments, weekNotes });
+    setPlans(plans);
+    setD({ coach, programs, checkins, logs, exercises, tests, payments, weekNotes, plans });
   }, [player.id, player.coach_id]);
 
   useEffect(() => { act(load); }, [load]);
@@ -70,9 +73,9 @@ export default function PlayerApp({ player, session, onLogout, canSwitch, onSwit
       </div>
       {tab !== 'cuenta' && (
         <nav className="ptabs" role="tablist" aria-label="Secciones">
-          {[['checkin', 'Check-in', doneToday ? '✓' : '●'], ['semana', 'Semana', '▦'], ['hoy', 'Hoy', '▶'], ['progreso', 'Progreso', '↗'], ['planes', 'Planes', '★']].map(([k, l, ic]) => (
+          {[['checkin', 'Check-in'], ['semana', 'Semana'], ['hoy', 'Hoy'], ['progreso', 'Progreso'], ['planes', 'Planes']].map(([k, l]) => (
             <button key={k} type="button" role="tab" aria-selected={tab === k} onClick={() => setT(k)} className={(k === 'hoy' ? 'mid ' : '') + (k === 'checkin' && !doneToday ? 'due' : '')}>
-              <span aria-hidden="true" className="ic">{ic}</span>{l}
+              <span aria-hidden="true" className="ic"><TabIcon k={k} done={doneToday} /></span><span className="lbl">{l}</span>
             </button>
           ))}
         </nav>
@@ -544,16 +547,11 @@ function Plans({ ctx }) {
       </Hero>
       {PLANS.map((pl) => {
         const mine = player.plan === pl.name;
-        const msg = `Hola, soy ${first}. Me interesa ${mine ? 'seguir con' : 'el plan'} «${pl.name}» (${pl.fee} €${pl.type === 'unico' ? ' pago único' : '/mes'}). ¿Lo hablamos?`;
+        const msg = `Hola, soy ${first}. Me interesa ${mine ? 'seguir con' : pl.offer ? 'la oferta' : 'el plan'} «${pl.name}» (${feeLabel(pl)}). ¿Lo hablamos?`;
         return (
-          <section key={pl.name} className={'tile ' + pl.color + (mine ? ' mine' : '')} aria-label={pl.name}>
-            <h3>{pl.name} <span className="pill">{mine ? 'Tu plan' : pl.tag}</span></h3>
-            <div className="big num">{pl.fee}<small> €{pl.type === 'unico' ? ' pago único' : '/mes'}</small></div>
-            <div className="sub">{pl.pitch}</div>
-            <ul>{pl.features.map((f) => <li key={f}><span>✓ {f.replace('su posición', 'tu posición').replace('su fisio', 'tu fisio')}</span></li>)}</ul>
-            {pl.commitment && <div className="sub">Compromiso de {pl.commitment} meses: es el tiempo mínimo para que la fuerza y la velocidad se noten en los tests. Después, mes a mes.</div>}
+          <PlanCard key={pl.name} plan={pl} badge={mine ? 'Tu plan' : null} className={mine ? 'mine' : ''}>
             {coach?.whatsapp && <a className="btn" target="_blank" rel="noopener" href={waURL(coach.whatsapp, msg)}><WAIcon /> {mine ? 'Hablar de mi plan' : 'Me interesa'}</a>}
-          </section>
+          </PlanCard>
         );
       })}
     </div>
@@ -638,4 +636,14 @@ function ClubToday({ ctx }) {
   return c.match
     ? <Hero color="t-r" kicker="Hoy" title={matchText(c.match)} sub="Calienta bien, hidrátate y mañana apunta cómo fue." />
     : <Hero color="t-p" kicker="Hoy" title={`Entreno con tu club${c.time ? ' · ' + c.time : ''}`} sub="Mañana te pediré el RPE y los minutos." />;
+}
+
+// Iconos de la barra inferior (trazo, heredan el color)
+function TabIcon({ k, done }) {
+  const p = { width: 22, height: 22, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' };
+  if (k === 'checkin') return <svg {...p}><path d="M12 21s-7-4.4-9.3-9A5.3 5.3 0 0 1 12 6a5.3 5.3 0 0 1 9.3 6c-2.3 4.6-9.3 9-9.3 9Z" />{done && <path d="m8.5 12 2.5 2.5 4.5-4.5" />}</svg>;
+  if (k === 'semana') return <svg {...p}><rect x="3" y="4.5" width="18" height="16" rx="3" /><path d="M3 9.5h18M8 2.5v4M16 2.5v4" /></svg>;
+  if (k === 'hoy') return <svg {...p} width={26} height={26} fill="currentColor" stroke="none"><path d="M8 5.5v13a1 1 0 0 0 1.5.9l10.2-6.5a1 1 0 0 0 0-1.8L9.5 4.6A1 1 0 0 0 8 5.5Z" /></svg>;
+  if (k === 'progreso') return <svg {...p}><path d="M3 17l6-6 4 4 8-8" /><path d="M15 7h6v6" /></svg>;
+  return <svg {...p}><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8Z" /><circle cx="7.5" cy="7.5" r="1.5" /></svg>;
 }
