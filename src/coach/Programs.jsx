@@ -3,6 +3,7 @@ import { useCoach } from './CoachApp.jsx';
 import { supabase, q } from '../lib/supabase.js';
 import { matches, iso, fmtDate, DAYS, addDays, mondayOf } from '../lib/util.js';
 import { useAction, useToast, Empty, Tabs } from '../ui/ui.jsx';
+import ExercisePicker from './ExercisePicker.jsx';
 import {
   PACK_TYPES, emptyItem, emptyPack, emptySession, emptyWeek, emptyPhase, emptyProgram,
   cloneWithNewIds, label, totalWeeks, setsPerMuscle, calendarWeekIdx,
@@ -130,6 +131,12 @@ function Editor({ id }) {
   const player = players.find((p) => p.id === prog.player_id);
   const muscles = setsPerMuscle(week, exMap);
 
+  // Crea el ejercicio en la biblioteca desde el propio buscador
+  const quickAdd = (name, type) => act(async () => {
+    await q(supabase.from('exercises').insert({ coach_id: uid, name, type: PACK_TYPES.includes(type) ? type : 'Fuerza' }));
+    await load('exercises');
+  }, `«${name}» añadido a la biblioteca. Complétale músculos y vídeo en Biblioteca.`);
+
   const copy = (kind, data, msg) => { const c = { kind, data }; writeClip(c); setClip(c); toast(msg); };
 
   const delWithUndo = (fn, msg) => { mut(fn); toast(msg, { undo }); };
@@ -208,11 +215,12 @@ function Editor({ id }) {
                     <div className="item itemhead"><span></span><span>Ejercicio</span><span>Series</span><span>Reps</span><span>Carga</span><span>Desc.</span><span>Notas</span><span></span></div>
                     {p.items.map((it, j) => {
                       const set = (f) => (e) => mut((d) => { W(d).sessions[si].packs[k].items[j][f] = e.target.value; });
-                      const known = !it.exercise || exMap[it.exercise];
                       return (
                         <div className="item" key={it.id}>
                           <span className="lb">{label(k, j)}</span>
-                          <input className="ex" list="exlist" aria-label="Ejercicio" placeholder="Escribe para buscar…" value={it.exercise} onChange={set('exercise')} style={known ? {} : { borderColor: 'var(--warn)' }} title={known ? '' : 'No está en tu biblioteca'} />
+                          <ExercisePicker className="ex" value={it.exercise} exercises={exercises}
+                            onChange={(v) => mut((d) => { W(d).sessions[si].packs[k].items[j].exercise = v; })}
+                            onCreate={(name) => quickAdd(name, p.type)} />
                           <input aria-label="Series" inputMode="numeric" placeholder="Series" value={it.sets} onChange={set('sets')} />
                           <input aria-label="Repeticiones" placeholder="Reps" value={it.reps} onChange={set('reps')} />
                           <input aria-label="Carga" placeholder="Carga" value={it.load} onChange={set('load')} />
@@ -248,7 +256,6 @@ function Editor({ id }) {
         </>
       )}
 
-      <datalist id="exlist">{exercises.map((e) => <option key={e.id} value={e.name}>{e.primary_muscle || e.type}</option>)}</datalist>
       <Danger prog={prog} />
     </>
   );

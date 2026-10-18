@@ -21,7 +21,7 @@ export default function PlayerApp({ player, session, onLogout, canSwitch, onSwit
   const load = useCallback(async () => {
     const since = iso(addDays(new Date(), -90));
     const [coach, programs, checkins, logs, exercises] = await Promise.all([
-      q(supabase.from('coaches').select('brand_name,brand_short,logo,color,whatsapp').eq('id', player.coach_id).limit(1)).then((r) => r[0] || null),
+      q(supabase.from('coaches').select('*').eq('id', player.coach_id).limit(1)).then((r) => r[0] || null),
       q(supabase.from('programs').select('*').eq('player_id', player.id).order('start_date', { ascending: false })),
       q(supabase.from('checkins').select('*').eq('player_id', player.id).gte('date', since).order('date')),
       q(supabase.from('session_logs').select('*').eq('player_id', player.id).gte('date', since).order('date')),
@@ -48,39 +48,153 @@ export default function PlayerApp({ player, session, onLogout, canSwitch, onSwit
           {d.coach?.logo ? <img src={d.coach.logo} alt="" /> : <span className="logo">{(d.coach?.brand_short || d.coach?.brand_name || 'R').slice(0, 2)}</span>}
           <div><b>{d.coach?.brand_name}</b><div className="small muted">Hola, {player.name.split(' ')[0]}</div></div>
         </div>
-        <Menu coach={d.coach} onLogout={onLogout} canSwitch={canSwitch} onSwitch={onSwitch} />
+        <button className="btn sm" aria-pressed={tab === 'cuenta'} onClick={() => setT(tab === 'cuenta' ? 'hoy' : 'cuenta')}>{tab === 'cuenta' ? 'Volver' : 'Mi cuenta'}</button>
       </header>
       <div className="pwrap">
-        <Tabs tabs={[['checkin', doneToday ? 'Check-in ✓' : 'Check-in'], ['hoy', 'Hoy'], ['semana', 'Semana'], ['progreso', 'Progreso']]} value={tab} onChange={setT} />
+        {tab !== 'cuenta' && <Tabs tabs={[['checkin', doneToday ? 'Check-in ✓' : 'Check-in'], ['hoy', 'Hoy'], ['semana', 'Semana'], ['progreso', 'Progreso']]} value={tab} onChange={setT} />}
         {tab === 'checkin' && <Checkin ctx={ctx} onDone={() => setT('hoy')} />}
         {tab === 'hoy' && <Today ctx={ctx} />}
         {tab === 'semana' && <Week ctx={ctx} />}
         {tab === 'progreso' && <Progress ctx={ctx} />}
-        <p className="muted small" style={{ textAlign: 'center' }}>Con {PLATFORM}</p>
+        {tab === 'cuenta' && <Account ctx={ctx} session={session} onLogout={onLogout} canSwitch={canSwitch} onSwitch={onSwitch} />}
+        <Footer coach={d.coach} />
       </div>
     </div>
   );
 }
 
-function Menu({ coach, onLogout, canSwitch, onSwitch }) {
-  const [open, setOpen] = useState(false);
-  const [pw, setPw] = useState('');
-  const act = useAction();
+const PLATFORM_IG = 'rendimo.app';
+const igURL = (h) => `https://www.instagram.com/${String(h || '').replace(/^@/, '').trim()}/`;
+const IGIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10Zm0 8.2a3.2 3.2 0 1 1 0-6.4 3.2 3.2 0 0 1 0 6.4ZM17.3 5.5a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4ZM12 2.8c2.5 0 2.8 0 3.8.1 2.5.1 3.7 1.3 3.8 3.8.1 1 .1 1.3.1 3.8s0 2.8-.1 3.8c-.1 2.5-1.3 3.7-3.8 3.8-1 .1-1.3.1-3.8.1s-2.8 0-3.8-.1c-2.5-.1-3.7-1.3-3.8-3.8-.1-1-.1-1.3-.1-3.8s0-2.8.1-3.8C4.5 4.2 5.7 3 8.2 2.9c1-.1 1.3-.1 3.8-.1ZM12 1c-2.6 0-2.9 0-3.9.1C4.6 1.2 2.6 3.2 2.5 6.7 2.4 7.7 2.4 8 2.4 12s0 4.3.1 5.3c.1 3.5 2.1 5.5 5.6 5.6 1 .1 1.3.1 3.9.1s2.9 0 3.9-.1c3.5-.1 5.5-2.1 5.6-5.6.1-1 .1-1.3.1-5.3s0-4.3-.1-5.3c-.1-3.5-2.1-5.5-5.6-5.6C14.9 1 14.6 1 12 1Z"/></svg>
+);
+
+// Pie de página: redes del entrenador y de la plataforma
+function Footer({ coach }) {
+  const ig = coach?.instagram?.replace(/^@/, '').trim();
   return (
-    <div style={{ position: 'relative' }}>
-      <button className="btn sm" aria-expanded={open} onClick={() => setOpen(!open)}>Menú</button>
-      {open && (
-        <div className="panel stack" style={{ position: 'absolute', right: 0, top: 40, width: 280, zIndex: 30, boxShadow: '0 10px 30px rgb(0 0 0/.2)' }}>
-          {coach?.whatsapp && <a className="btn" target="_blank" rel="noopener" href={waURL(coach.whatsapp, 'Hola, ')}><WAIcon /> Escribir a mi entrenador</a>}
-          <form className="stack" style={{ gap: 6 }} onSubmit={(e) => { e.preventDefault(); act(async () => { const { error } = await supabase.auth.updateUser({ password: pw }); if (error) throw error; setPw(''); }, 'Contraseña guardada.'); }}>
-            <span className="small muted">Crear contraseña (opcional)</span>
-            <input type="password" minLength={8} required autoComplete="new-password" placeholder="Mínimo 8 caracteres" value={pw} onChange={(e) => setPw(e.target.value)} />
-            <button className="btn sm" type="submit">Guardar contraseña</button>
-          </form>
-          {canSwitch && <button className="btn" onClick={onSwitch}>Ir a mi panel de entrenador</button>}
-          <button className="btn" onClick={onLogout}>Cerrar sesión</button>
-        </div>
+    <footer className="pfoot">
+      {ig && (
+        <a href={igURL(ig)} target="_blank" rel="noopener"><IGIcon /> @{ig}</a>
       )}
+      <a href={igURL(PLATFORM_IG)} target="_blank" rel="noopener" className="muted"><IGIcon /> Con {PLATFORM} · @{PLATFORM_IG}</a>
+    </footer>
+  );
+}
+
+// Mi cuenta del jugador
+function Account({ ctx, session, onLogout, canSwitch, onSwitch }) {
+  const { player, coach, checkins, logs } = ctx;
+  const act = useAction();
+  const [hasPw, setHasPw] = useState(!!session?.user?.user_metadata?.has_password);
+  const [pwOpen, setPwOpen] = useState(false);
+  const [pw, setPw] = useState('');
+  const [pw2, setPw2] = useState('');
+  const [showData, setShowData] = useState(false);
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const installed = window.matchMedia?.('(display-mode: standalone)').matches;
+  const first = player.name.split(' ')[0];
+  const coachName = coach?.brand_name || 'tu entrenador';
+
+  const savePw = (e) => {
+    e.preventDefault();
+    if (pw !== pw2) return act(async () => { throw new Error('Las dos contraseñas no coinciden.'); });
+    act(async () => {
+      const { error } = await supabase.auth.updateUser({ password: pw, data: { has_password: true } });
+      if (error) throw new Error(/different from the old/i.test(error.message) ? 'La nueva contraseña tiene que ser distinta de la anterior.' : error.message);
+      setPw(''); setPw2(''); setPwOpen(false); setHasPw(true);
+    }, 'Contraseña guardada. Ya puedes entrar con ella.');
+  };
+
+  const askData = (kind) => waURL(coach?.whatsapp, kind === 'copia'
+    ? `Hola, soy ${player.name}. Quería pedir una copia de los datos que guardas de mí en la app.`
+    : `Hola, soy ${player.name}. Quería pedir que borres mis datos de la app.`);
+
+  return (
+    <div className="stack">
+      <div><h2>Mi cuenta</h2><p className="muted">Tus datos, tu acceso y cómo contactar con {coachName}.</p></div>
+
+      <section className="panel stack">
+        <h3>Mis datos</h3>
+        <dl className="kv">
+          <dt>Nombre</dt><dd>{player.name}</dd>
+          <dt>Correo</dt><dd>{player.email}</dd>
+          {player.position && <><dt>Posición</dt><dd>{player.position}</dd></>}
+          {player.plan && <><dt>Plan</dt><dd>{player.plan}</dd></>}
+          <dt>Con {coachName} desde</dt><dd>{fmtDate(player.start_date)}</dd>
+          <dt>Check-ins (90 días)</dt><dd className="num">{checkins.length}</dd>
+          <dt>Sesiones registradas</dt><dd className="num">{logs.length}</dd>
+        </dl>
+        <p className="muted small">¿Algún dato mal? Díselo a tu entrenador y lo corrige.</p>
+      </section>
+
+      <section className="panel stack">
+        <h3>Mi entrenador</h3>
+        <div className="row">
+          {coach?.logo ? <img src={coach.logo} alt="" style={{ width: 44, height: 44, objectFit: 'contain', borderRadius: 10, background: 'var(--soft)' }} /> : null}
+          <b>{coachName}</b>
+        </div>
+        <div className="row">
+          {coach?.whatsapp && <a className="btn pri" target="_blank" rel="noopener" href={waURL(coach.whatsapp, `Hola, soy ${first}. `)}><WAIcon /> Escribir por WhatsApp</a>}
+          {coach?.instagram && <a className="btn" target="_blank" rel="noopener" href={igURL(coach.instagram)}><IGIcon /> @{coach.instagram.replace(/^@/, '')}</a>}
+        </div>
+      </section>
+
+      <section className="panel stack">
+        <h3>Acceso</h3>
+        <div className="between">
+          <span>Contraseña</span>
+          {hasPw ? <span className="pill ok">Creada ✓</span> : <span className="pill">Sin contraseña</span>}
+        </div>
+        <p className="muted small">
+          {hasPw ? 'Puedes entrar con tu correo y contraseña, o pedir un enlace por correo.'
+            : 'Ahora entras con un enlace por correo. Si prefieres, crea una contraseña para entrar más rápido.'}
+        </p>
+        {pwOpen ? (
+          <form className="stack" style={{ gap: 8 }} onSubmit={savePw}>
+            <input id="pw-new" type="password" minLength={8} required autoComplete="new-password" placeholder="Nueva contraseña (mínimo 8 caracteres)" value={pw} onChange={(e) => setPw(e.target.value)} />
+            <input id="pw-rep" type="password" minLength={8} required autoComplete="new-password" placeholder="Repite la contraseña" value={pw2} onChange={(e) => setPw2(e.target.value)} />
+            <div className="row"><button className="btn pri" type="submit">Guardar contraseña</button><button type="button" className="btn" onClick={() => { setPwOpen(false); setPw(''); setPw2(''); }}>Cancelar</button></div>
+          </form>
+        ) : (
+          <div className="row"><button className="btn" onClick={() => setPwOpen(true)}>{hasPw ? 'Cambiar contraseña' : 'Crear contraseña'}</button></div>
+        )}
+      </section>
+
+      {!installed && (
+        <section className="panel stack">
+          <h3>Tener la app en el móvil</h3>
+          <p className="small">Añádela a tu pantalla de inicio y se abre como una app normal, sin buscarla en el navegador.</p>
+          {isIOS
+            ? <ol className="small" style={{ margin: 0, paddingLeft: 20 }}><li>Abre esta página en <b>Safari</b>.</li><li>Pulsa el botón <b>Compartir</b> (cuadrado con flecha).</li><li>Elige <b>Añadir a pantalla de inicio</b>.</li></ol>
+            : <ol className="small" style={{ margin: 0, paddingLeft: 20 }}><li>Abre esta página en <b>Chrome</b>.</li><li>Pulsa el menú <b>⋮</b> arriba a la derecha.</li><li>Elige <b>Instalar app</b> o <b>Añadir a pantalla de inicio</b>.</li></ol>}
+        </section>
+      )}
+
+      <section className="panel stack">
+        <h3>Mis datos y privacidad</h3>
+        <p className="small">Consentimiento aceptado el <b>{fmtDate(player.consent_at)}</b>. Solo {coachName} ve tus datos, guardados cifrados en servidores de la Unión Europea.</p>
+        <button className="btn sm" style={{ justifySelf: 'start' }} aria-expanded={showData} onClick={() => setShowData(!showData)}>{showData ? 'Ocultar' : 'Qué datos se guardan'}</button>
+        {showData && (
+          <ul className="small" style={{ margin: 0, paddingLeft: 20 }}>
+            <li>Contacto y plan: nombre, correo, teléfono, posición.</li>
+            <li>Entrenamiento: programas, sesiones hechas, cargas, RPE y duración.</li>
+            <li>Bienestar diario: sueño, energía, agujetas, estrés, ánimo y dolor.</li>
+            <li>Salud: lesiones, antecedentes e informes que compartas con tu entrenador.</li>
+          </ul>
+        )}
+        {coach?.whatsapp && (
+          <div className="row">
+            <a className="btn sm" target="_blank" rel="noopener" href={askData('copia')}>Pedir una copia de mis datos</a>
+            <a className="btn sm" target="_blank" rel="noopener" href={askData('borrar')}>Pedir que se borren</a>
+          </div>
+        )}
+      </section>
+
+      <div className="row">
+        {canSwitch && <button className="btn" onClick={onSwitch}>Ir a mi panel de entrenador</button>}
+        <button className="btn" onClick={onLogout}>Cerrar sesión</button>
+      </div>
     </div>
   );
 }

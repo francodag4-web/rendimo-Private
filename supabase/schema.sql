@@ -20,8 +20,10 @@ create table if not exists public.coaches (
   logo        text,                              -- imagen pequeña en data URL
   color       text not null default '#d9480f' check (color ~ '^#[0-9a-fA-F]{6}$'),
   whatsapp    text,
+  instagram   text,
   created_at  timestamptz not null default now()
 );
+alter table public.coaches add column if not exists instagram text;
 
 -- Jugadores / clientes de cada entrenador
 create table if not exists public.players (
@@ -217,7 +219,7 @@ grant update (email, name, phone, position, plan, start_date, end_date,
 -- coaches: id y email no se cambian desde la app
 revoke insert on public.coaches from authenticated;
 revoke update on public.coaches from authenticated;
-grant update (brand_name, brand_short, logo, color, whatsapp) on public.coaches to authenticated;
+grant update (brand_name, brand_short, logo, color, whatsapp, instagram) on public.coaches to authenticated;
 revoke all on public.coach_allowlist from authenticated;
 
 grant execute on function public.claim_access() to authenticated;

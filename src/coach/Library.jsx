@@ -4,52 +4,10 @@ import { supabase, q } from '../lib/supabase.js';
 import { matches } from '../lib/util.js';
 import { useAction, useToast, Empty } from '../ui/ui.jsx';
 import { PACK_TYPES } from '../lib/program.js';
+import { BASIC } from './basicLibrary.js';
 
 export const MUSCLES = ['Cuádriceps', 'Isquiotibiales', 'Glúteos', 'Aductores', 'Gemelos', 'Pectoral', 'Dorsal', 'Espalda alta', 'Deltoides', 'Bíceps', 'Tríceps', 'Core', 'Cuello'];
 
-// Biblioteca básica para empezar (se puede editar o borrar)
-const BASIC = [
-  ['Sentadilla trasera', 'Fuerza', 'Cuádriceps', ['Glúteos', 'Aductores']],
-  ['Sentadilla frontal', 'Fuerza', 'Cuádriceps', ['Glúteos', 'Core']],
-  ['Sentadilla búlgara', 'Fuerza', 'Cuádriceps', ['Glúteos']],
-  ['Zancada atrás', 'Fuerza', 'Cuádriceps', ['Glúteos']],
-  ['Peso muerto convencional', 'Fuerza', 'Isquiotibiales', ['Glúteos', 'Espalda alta']],
-  ['Peso muerto rumano', 'Fuerza', 'Isquiotibiales', ['Glúteos']],
-  ['Hip thrust', 'Fuerza', 'Glúteos', ['Isquiotibiales']],
-  ['Curl nórdico', 'Prevención', 'Isquiotibiales', []],
-  ['Copenhague', 'Prevención', 'Aductores', ['Core']],
-  ['Elevación de gemelo de pie', 'Fuerza', 'Gemelos', []],
-  ['Press banca', 'Fuerza', 'Pectoral', ['Tríceps', 'Deltoides']],
-  ['Press banca inclinado mancuernas', 'Fuerza', 'Pectoral', ['Deltoides', 'Tríceps']],
-  ['Fondos en paralelas', 'Fuerza', 'Pectoral', ['Tríceps']],
-  ['Press militar', 'Fuerza', 'Deltoides', ['Tríceps']],
-  ['Landmine press', 'Fuerza', 'Deltoides', ['Pectoral', 'Core']],
-  ['Dominadas', 'Fuerza', 'Dorsal', ['Bíceps']],
-  ['Remo con barra', 'Fuerza', 'Espalda alta', ['Dorsal', 'Bíceps']],
-  ['Remo con mancuerna', 'Fuerza', 'Dorsal', ['Espalda alta', 'Bíceps']],
-  ['Face pull', 'Prevención', 'Espalda alta', ['Deltoides']],
-  ['Curl de bíceps', 'Fuerza', 'Bíceps', []],
-  ['Extensión de tríceps en polea', 'Fuerza', 'Tríceps', []],
-  ['Plancha frontal', 'Core', 'Core', []],
-  ['Pallof press', 'Core', 'Core', []],
-  ['Rueda abdominal', 'Core', 'Core', []],
-  ['Isometría de cuello 4 direcciones', 'Prevención', 'Cuello', []],
-  ['Cargada de potencia', 'Potencia', 'Glúteos', ['Cuádriceps', 'Isquiotibiales', 'Espalda alta']],
-  ['Arrancada colgante', 'Potencia', 'Glúteos', ['Cuádriceps', 'Espalda alta']],
-  ['Salto con contramovimiento (CMJ)', 'Pliometría', 'Cuádriceps', ['Glúteos']],
-  ['Salto al cajón', 'Pliometría', 'Cuádriceps', ['Glúteos']],
-  ['Saltos horizontales encadenados', 'Pliometría', 'Glúteos', ['Isquiotibiales']],
-  ['Lanzamiento de balón medicinal', 'Potencia', 'Pectoral', ['Core']],
-  ['Sprint 10 m', 'Velocidad', 'Isquiotibiales', ['Glúteos']],
-  ['Sprint 30 m', 'Velocidad', 'Isquiotibiales', ['Glúteos']],
-  ['Arrastre de trineo', 'Velocidad', 'Cuádriceps', ['Glúteos']],
-  ['Cambios de dirección 505', 'Velocidad', 'Cuádriceps', ['Aductores']],
-  ['Carrera intermitente 30-15', 'Acondicionamiento', 'Cuádriceps', []],
-  ['Movilidad de cadera 90/90', 'Movilidad', 'Glúteos', []],
-  ['Movilidad torácica en cuadrupedia', 'Movilidad', 'Espalda alta', []],
-  ['Movilidad de tobillo en pared', 'Movilidad', 'Gemelos', []],
-  ['Activación de glúteo con banda', 'Activación', 'Glúteos', []],
-];
 
 export default function Library() {
   const { exercises, uid, load } = useCoach();
@@ -61,12 +19,13 @@ export default function Library() {
   const types = [...new Set(exercises.map((e) => e.type))].sort();
   const list = exercises.filter((e) => (!type || e.type === type) && matches(`${e.name} ${e.type} ${e.primary_muscle || ''} ${(e.secondary || []).join(' ')}`, qy));
 
+  const have = new Set(exercises.map((e) => e.name.toLowerCase()));
+  const missing = BASIC.filter(([n]) => !have.has(n.toLowerCase()));
   const seed = () => act(async () => {
-    const have = new Set(exercises.map((e) => e.name));
-    const rows = BASIC.filter(([n]) => !have.has(n)).map(([name, type, primary_muscle, secondary]) => ({ coach_id: uid, name, type, primary_muscle, secondary }));
+    const rows = missing.map(([name, type, primary_muscle, secondary]) => ({ coach_id: uid, name, type, primary_muscle, secondary }));
     if (rows.length) await q(supabase.from('exercises').insert(rows));
     await load('exercises');
-  }, 'Biblioteca básica cargada: 40 ejercicios.');
+  }, `Añadidos ${missing.length} ejercicios a tu biblioteca.`);
 
   const del = (e) => act(async () => {
     await q(supabase.from('exercises').delete().eq('id', e.id));
@@ -79,7 +38,7 @@ export default function Library() {
       <div className="pagehead">
         <div><h1>Biblioteca</h1><p>{exercises.length} ejercicios. Los mismos que te aparecen al escribir en Programación.</p></div>
         <div className="row">
-          {exercises.length < 10 && <button className="btn" onClick={seed}>Cargar biblioteca básica</button>}
+          {missing.length > 0 && <button className="btn" onClick={seed}>{exercises.length ? `Añadir ${missing.length} ejercicios básicos` : `Cargar biblioteca básica (${missing.length})`}</button>}
           <button className="btn pri" onClick={() => setEdit('new')}>+ Ejercicio</button>
         </div>
       </div>
