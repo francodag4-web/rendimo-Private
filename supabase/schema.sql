@@ -337,3 +337,178 @@ create policy alert_actions_coach on public.alert_actions for all to authenticat
 drop trigger if exists alert_actions_touch on public.alert_actions;
 create trigger alert_actions_touch before update on public.alert_actions
   for each row execute function public.touch_updated_at();
+
+
+-- ===== Funciones del prototipo (6-prototipo.sql) =====
+-- =====================================================================
+-- Rendimo · funciones del prototipo FRP
+-- Ficha completa del jugador, evolución, tests, lesiones, pagos,
+-- solicitudes (con formulario público) y bloques guardados.
+-- Se puede ejecutar más de una vez sin romper nada.
+-- =====================================================================
+
+-- ---------- Jugador: datos de la ficha ----------
+alter table public.players add column if not exists objective      text;
+alter table public.players add column if not exists club_days      text;
+alter table public.players add column if not exists extra_days     text;
+alter table public.players add column if not exists equipment      text;
+alter table public.players add column if not exists screening      text default 'pendiente';
+alter table public.players add column if not exists review_days    smallint default 14;
+alter table public.players add column if not exists next_review    date;
+alter table public.players add column if not exists commitment_months smallint default 3;
+alter table public.players add column if not exists fee            numeric(8,2);
+alter table public.players add column if not exists fee_type       text default 'mensual';
+alter table public.players add column if not exists flags          text[] not null default '{}';
+
+grant insert (coach_id, email, name, phone, position, plan, start_date, end_date, end_reason, important, restrictions,
+              objective, club_days, extra_days, equipment, screening, review_days, next_review, commitment_months, fee, fee_type, flags)
+  on public.players to authenticated;
+grant update (email, name, phone, position, plan, start_date, end_date, end_reason, important, restrictions,
+              objective, club_days, extra_days, equipment, screening, review_days, next_review, commitment_months, fee, fee_type, flags)
+  on public.players to authenticated;
+
+-- ---------- Entrenador: identificador público para el formulario ----------
+alter table public.coaches add column if not exists slug text unique;
+grant update (brand_name, brand_short, logo, color, whatsapp, instagram, slug) on public.coaches to authenticated;
+
+-- ---------- Ejercicios: semana con nombre (en JSON) no necesita columna ----------
+
+-- ---------- Evolución y ajustes ----------
+create table if not exists public.evolution (
+  id         uuid primary key default gen_random_uuid(),
+  coach_id   uuid not null references public.coaches(id) on delete cascade,
+  player_id  uuid not null references public.players(id) on delete cascade,
+  date       date not null default current_date,
+  category   text not null default 'ajuste' check (category in ('ajuste','valor','molestia','test','comunicacion')),
+  text       text not null,
+  created_at timestamptz not null default now()
+);
+
+-- ---------- Tests ----------
+create table if not exists public.tests (
+  id         uuid primary key default gen_random_uuid(),
+  coach_id   uuid not null references public.coaches(id) on delete cascade,
+  player_id  uuid not null references public.players(id) on delete cascade,
+  date       date not null default current_date,
+  test       text not null,
+  unit       text,
+  value      numeric(10,2),
+  value_r    numeric(10,2),          -- lado derecho si el test es bilateral (value = izquierdo)
+  better     text not null default 'mas' check (better in ('mas','menos')),
+  note       text,
+  created_at timestamptz not null default now()
+);
+
+-- ---------- Lesiones (gravedad según días de baja, Fuller et al. 2007) ----------
+create table if not exists public.injuries (
+  id         uuid primary key default gen_random_uuid(),
+  coach_id   uuid not null references public.coaches(id) on delete cascade,
+  player_id  uuid not null references public.players(id) on delete cascade,
+  date       date not null default current_date,
+  zone       text not null,
+  side       text check (side in ('izq','der','central')),
+  kind       text,
+  days_out   smallint,
+  status     text not null default 'activa' check (status in ('activa','readaptacion','recuperada')),
+  recurrence boolean not null default false,
+  note       text,
+  created_at timestamptz not null default now()
+);
+
+-- ---------- Pagos (control manual por mes) ----------
+create table if not exists public.payments (
+  id         uuid primary key default gen_random_uuid(),
+  coach_id   uuid not null references public.coaches(id) on delete cascade,
+  player_id  uuid not null references public.players(id) on delete cascade,
+  month      text not null check (month ~ '^\d{4}-\d{2}$'),
+  amount     numeric(8,2),
+  paid_at    date not null default current_date,
+  unique (player_id, month)
+);
+
+-- ---------- Solicitudes ----------
+create table if not exists public.leads (
+  id         uuid primary key default gen_random_uuid(),
+  coach_id   uuid not null references public.coaches(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  name       text not null,
+  phone      text,
+  email      text,
+  position   text,
+  plan       text,
+  goal       text,
+  injuries   text,
+  message    text,
+  stage      smallint not null default 0,   -- 0 contactar · 1 videollamada · 2 alta
+  call_at    timestamptz,
+  status     text not null default 'activa' check (status in ('activa','convertida','descartada')),
+  player_id  uuid references public.players(id) on delete set null
+);
+
+-- Formulario público: cualquiera puede enviar una solicitud a un entrenador por su identificador
+create or replace function public.submit_lead(coach_slug text, p jsonb) returns boolean
+language plpgsql security definer set search_path = '' as $$
+declare cid uuid;
+begin
+  select id into cid from public.coaches where slug = lower(coach_slug);
+  if cid is null then return false; end if;
+  if coalesce(trim(p->>'name'),'') = '' or length(p::text) > 5000 then return false; end if;
+  insert into public.leads (coach_id, name, phone, email, position, plan, goal, injuries, message)
+  values (cid, left(trim(p->>'name'),120), left(p->>'phone',40), left(lower(p->>'email'),160), left(p->>'position',80),
+          left(p->>'plan',80), left(p->>'goal',300), left(p->>'injuries',500), left(p->>'message',1500));
+  return true;
+end $$;
+grant execute on function public.submit_lead(text, jsonb) to anon, authenticated;
+
+-- Datos públicos de la marca para pintar el formulario (sin correo ni teléfono)
+create or replace function public.public_brand(coach_slug text) returns jsonb
+language sql stable security definer set search_path = '' as $$
+  select jsonb_build_object('brand_name', brand_name, 'logo', logo, 'color', color, 'instagram', instagram)
+    from public.coaches where slug = lower(coach_slug);
+$$;
+grant execute on function public.public_brand(text) to anon, authenticated;
+
+-- ---------- Bloques guardados ----------
+create table if not exists public.saved_blocks (
+  id         uuid primary key default gen_random_uuid(),
+  coach_id   uuid not null references public.coaches(id) on delete cascade,
+  name       text not null,
+  data       jsonb not null,
+  created_at timestamptz not null default now()
+);
+
+-- ---------- Permisos y seguridad por filas ----------
+grant select, insert, update, delete on public.evolution, public.tests, public.injuries,
+  public.payments, public.leads, public.saved_blocks to authenticated;
+alter table public.evolution    enable row level security;
+alter table public.tests        enable row level security;
+alter table public.injuries     enable row level security;
+alter table public.payments     enable row level security;
+alter table public.leads        enable row level security;
+alter table public.saved_blocks enable row level security;
+
+-- Solo el entrenador de ese jugador
+drop policy if exists evolution_coach on public.evolution;
+create policy evolution_coach on public.evolution for all to authenticated
+  using (coach_id = auth.uid()) with check (coach_id = auth.uid() and public.coach_of(player_id) = auth.uid());
+drop policy if exists tests_coach on public.tests;
+create policy tests_coach on public.tests for all to authenticated
+  using (coach_id = auth.uid()) with check (coach_id = auth.uid() and public.coach_of(player_id) = auth.uid());
+drop policy if exists injuries_coach on public.injuries;
+create policy injuries_coach on public.injuries for all to authenticated
+  using (coach_id = auth.uid()) with check (coach_id = auth.uid() and public.coach_of(player_id) = auth.uid());
+drop policy if exists payments_coach on public.payments;
+create policy payments_coach on public.payments for all to authenticated
+  using (coach_id = auth.uid()) with check (coach_id = auth.uid() and public.coach_of(player_id) = auth.uid());
+drop policy if exists leads_coach on public.leads;
+create policy leads_coach on public.leads for all to authenticated
+  using (coach_id = auth.uid())
+  with check (coach_id = auth.uid() and (player_id is null or public.coach_of(player_id) = auth.uid()));
+drop policy if exists blocks_coach on public.saved_blocks;
+create policy blocks_coach on public.saved_blocks for all to authenticated
+  using (coach_id = auth.uid()) with check (coach_id = auth.uid());
+
+-- El jugador puede ver sus propios tests (para su progreso)
+drop policy if exists tests_self on public.tests;
+create policy tests_self on public.tests for select to authenticated
+  using (player_id = public.my_player_id());

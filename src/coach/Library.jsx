@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useCoach } from './CoachApp.jsx';
 import { supabase, q } from '../lib/supabase.js';
 import { matches, norm } from '../lib/util.js';
@@ -11,10 +11,12 @@ export const MUSCLES = ['Cuádriceps', 'Isquiotibiales', 'Glúteos', 'Aductores'
 
 
 export default function Library() {
-  const { exercises, uid, load } = useCoach();
+  const { exercises, uid, load, route } = useCoach();
   const act = useAction();
   const toast = useToast();
-  const [qy, setQy] = useState('');
+  const fromSearch = route.id?.startsWith('q=') ? decodeURIComponent(route.id.slice(2)) : '';
+  const [qy, setQy] = useState(fromSearch);
+  useEffect(() => { if (fromSearch) setQy(fromSearch); }, [fromSearch]);
   const [type, setType] = useState('');
   const [edit, setEdit] = useState(null); // null | 'new' | exercise
   const [importing, setImporting] = useState(false);

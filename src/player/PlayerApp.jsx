@@ -1,3 +1,4 @@
+import { testSummary, fmtNum } from '../lib/domain.js';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase, q, PLATFORM, fetchAll } from '../lib/supabase.js';
 import { applyBrand } from '../App.jsx';
@@ -20,14 +21,15 @@ export default function PlayerApp({ player, session, onLogout, canSwitch, onSwit
 
   const load = useCallback(async () => {
     const since = iso(addDays(new Date(), -90));
-    const [coach, programs, checkins, logs, exercises] = await Promise.all([
+    const [coach, programs, checkins, logs, exercises, tests] = await Promise.all([
       q(supabase.from('coaches').select('*').eq('id', player.coach_id).limit(1)).then((r) => r[0] || null),
       q(supabase.from('programs').select('*').eq('player_id', player.id).order('start_date', { ascending: false })),
       q(supabase.from('checkins').select('*').eq('player_id', player.id).gte('date', since).order('date')),
       q(supabase.from('session_logs').select('*').eq('player_id', player.id).gte('date', since).order('date')),
       fetchAll(() => supabase.from('exercises').select('name,video_url,notes').order('id')),
+      supabase.from('tests').select('*').eq('player_id', player.id).order('date').order('created_at').then(({ data }) => data || []),
     ]);
-    setD({ coach, programs, checkins, logs, exercises });
+    setD({ coach, programs, checkins, logs, exercises, tests });
   }, [player.id, player.coach_id]);
 
   useEffect(() => { act(load); }, [load]);
@@ -348,7 +350,8 @@ function Week({ ctx }) {
 }
 
 function Progress({ ctx }) {
-  const { logs, checkins } = ctx;
+  const { logs, checkins, tests = [] } = ctx;
+  const sums = testSummary(tests);
   const mon = mondayOf(new Date());
   const weeks = Array.from({ length: 8 }, (_, i) => {
     const a = addDays(mon, -7 * (7 - i)); const b = addDays(a, 6);
@@ -368,6 +371,15 @@ function Progress({ ctx }) {
       </div>
       <div className="panel stack"><h3>Tu carga semanal</h3><p className="muted small">RPE × minutos de cada sesión, sumado por semana.</p><Bars data={weeks} /></div>
       <div className="panel stack"><h3>Tu bienestar</h3><p className="muted small">De 5 a 25. Si baja varios días seguidos, coméntalo con tu entrenador.</p><Line data={days} min={5} max={25} refLine={13} /></div>
+      {sums.length > 0 && (
+        <div className="panel stack">
+          <h3>Tus tests</h3>
+          <ul className="list">{sums.map((s) => (
+            <li key={s.name}><span><b>{s.name}</b> <span className="muted small">{s.unit}</span></span>
+              <span className="row num">{s.list.length > 1 && <span className="muted small">inicio {fmtNum(s.v0)} →</span>}<b>{fmtNum(s.v1)}</b>{s.change != null && <span className={'pill ' + (s.improved ? 'ok' : 'warn')}>{s.change > 0 ? '+' : ''}{fmtNum(s.change, 1)} %</span>}</span></li>
+          ))}</ul>
+        </div>
+      )}
     </div>
   );
 }

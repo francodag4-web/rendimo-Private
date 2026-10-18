@@ -5,7 +5,7 @@ import { iso, addDays, mondayOf, DAYS, DAYS_SHORT, MONTHS, fmtDateTime } from '.
 import { useAction, useToast, Empty } from '../ui/ui.jsx';
 
 export default function Agenda() {
-  const { tasks, notes, players, uid, load, go, alertActions = [] } = useCoach();
+  const { tasks, notes, players, uid, load, go, alertActions = [], leads = [] } = useCoach();
   const act = useAction();
   const toast = useToast();
   const [month, setMonth] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
@@ -19,6 +19,8 @@ export default function Agenda() {
   tasks.forEach((t) => add(iso(t.due_at), { kind: 'task', id: t.id, title: t.title, done: t.done, at: t.due_at, player: t.player_id, raw: t }));
   notes.filter((n) => n.remind_at).forEach((n) => add(iso(n.remind_at), { kind: 'note', id: n.id, title: n.text, done: n.done, at: n.remind_at, player: n.player_id, raw: n }));
   alertActions.filter((x) => x.due_date && x.status !== 'nueva').forEach((x) => add(x.due_date, { kind: 'alert', id: x.id, title: `Alerta: ${x.alert_key.split(':')[0].replace('sin-checkin', 'sin check-in')}${x.note ? ' · ' + x.note : ''}`, done: x.status === 'gestionada', at: `${x.due_date}T09:00:00`, player: x.player_id, raw: x }));
+  players.filter((p) => !p.end_date && p.next_review).forEach((p) => add(p.next_review, { kind: 'review', id: 'r' + p.id, title: 'Revisión', done: false, at: `${p.next_review}T08:00:00`, player: p.id, raw: p }));
+  leads.filter((l) => l.status === 'activa' && l.call_at).forEach((l) => add(iso(l.call_at), { kind: 'call', id: 'c' + l.id, title: `Videollamada con ${l.name}`, done: (l.stage || 0) >= 3, at: l.call_at, player: null, raw: l }));
   Object.values(events).forEach((l) => l.sort((a, b) => a.at.localeCompare(b.at)));
 
   const first = mondayOf(month);
@@ -27,6 +29,15 @@ export default function Agenda() {
   const weekDays = Array.from({ length: 7 }, (_, i) => iso(addDays(weekStart, i)));
 
   const toggle = (ev) => act(async () => {
+    if (ev.kind === 'review') {
+      await q(supabase.from('players').update({ next_review: iso(addDays(new Date(), Number(ev.raw.review_days) || 14)) }).eq('id', ev.raw.id));
+      await q(supabase.from('evolution').insert({ coach_id: uid, player_id: ev.raw.id, category: 'valor', text: 'Revisión hecha.' }));
+      return load(['players', 'evolution']);
+    }
+    if (ev.kind === 'call') {
+      await q(supabase.from('leads').update({ stage: ev.done ? 2 : 3 }).eq('id', ev.raw.id));
+      return load('leads');
+    }
     if (ev.kind === 'alert') {
       await q(supabase.from('alert_actions').update({ status: ev.done ? 'pendiente' : 'gestionada' }).eq('id', ev.id));
       return load('alertActions');
@@ -80,7 +91,7 @@ export default function Agenda() {
             return (
               <button key={k} type="button" className={'day' + (c.getMonth() !== month.getMonth() ? ' out' : '') + (k === iso() ? ' today' : '') + (k === sel ? ' sel' : '')} onClick={() => setSel(k)} aria-label={`${c.getDate()} de ${MONTHS[c.getMonth()]}: ${ev.length} eventos`}>
                 <span className="dn">{c.getDate()}</span>
-                {ev.slice(0, 3).map((e) => <span key={e.id} className={'ev' + (e.kind === 'note' ? ' note' : e.kind === 'alert' ? ' alert' : '') + (e.done ? ' done' : '')}>{e.title}</span>)}
+                {ev.slice(0, 3).map((e) => <span key={e.id} className={'ev' + (e.kind === 'note' ? ' note' : e.kind === 'alert' ? ' alert' : e.kind === 'review' || e.kind === 'call' ? ' note' : '') + (e.done ? ' done' : '')}>{e.kind === 'review' ? `Revisión ${pname(e.player)?.split(' ')[0]}` : e.title}</span>)}
                 {ev.length > 3 && <span className="small muted">+{ev.length - 3}</span>}
               </button>
             );
@@ -99,7 +110,8 @@ export default function Agenda() {
                   {ev.map((e) => (
                     <li key={e.id} style={e.done ? { opacity: 0.55 } : {}}>
                       <span className="row"><input type="checkbox" style={{ width: 18 }} checked={e.done} onChange={() => toggle(e)} aria-label="Hecha" />
-                        <span style={e.done ? { textDecoration: 'line-through' } : {}}>{e.kind === 'note' ? (e.raw.kind === 'importante' ? '⚠ ' : '📝 ') : e.kind === 'alert' ? (e.raw.urgent ? '🔴 ' : '🔔 ') : ''}{e.title}</span>
+                        <span style={e.done ? { textDecoration: 'line-through' } : {}}>{e.kind === 'note' ? (e.raw.kind === 'importante' ? '⚠ ' : '📝 ') : e.kind === 'alert' ? (e.raw.urgent ? '🔴 ' : '🔔 ') : e.kind === 'review' ? '🔁 ' : e.kind === 'call' ? '📹 ' : ''}{e.title}</span>
+                        {e.kind === 'call' && <button className="btn ghost sm" onClick={() => go('solicitudes')}>Ver solicitud</button>}
                         {e.player && <button className="btn ghost sm" onClick={() => go('clientes', e.player)}>{pname(e.player)}</button>}
                       </span>
                       <span className="row"><span className="muted small">{fmtDateTime(e.at).split('·')[1]}</span>{e.kind === 'task' && <button className="ib" aria-label="Eliminar tarea" onClick={() => delTask(e)}>✕</button>}</span>

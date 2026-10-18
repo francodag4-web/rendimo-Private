@@ -101,8 +101,8 @@ export function Line({ data, min = 0, max, height = 140, refLine }) {
     <svg className="chart" viewBox={`0 0 ${W} ${H + 20}`} role="img" aria-label="Gráfica de línea">
       <line x1={pad} x2={W - pad} y1={H} y2={H} stroke="var(--line)" />
       {refLine != null && <line x1={pad} x2={W - pad} y1={y(refLine)} y2={y(refLine)} stroke="var(--warn)" strokeDasharray="4 4" />}
-      <text x={4} y={y(hi) + 4}>{hi}</text>
-      <text x={4} y={H}>{min}</text>
+      <text x={4} y={y(hi) + 4}>{String(hi).replace('.', ',')}</text>
+      <text x={4} y={H}>{String(min).replace('.', ',')}</text>
       {path && <path d={path} fill="none" stroke="var(--brand)" strokeWidth="2.5" />}
       {pts.map((p, i) => <circle key={i} cx={p[0]} cy={p[1]} r={i === pts.length - 1 ? 4.5 : 3} fill="var(--brand)" />)}
       {data.map((d, i) => (i % Math.ceil(data.length / 7) === 0 || i === data.length - 1) && (

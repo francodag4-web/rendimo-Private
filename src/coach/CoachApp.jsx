@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { supabase, q, PLATFORM, fetchAll } from '../lib/supabase.js';
 import { applyBrand } from '../App.jsx';
-import { iso, addDays, wellness } from '../lib/util.js';
+import { iso, addDays, wellness, parseISO, daysBetween } from '../lib/util.js';
 import { Loading } from '../ui/ui.jsx';
 import Home from './Home.jsx';
 import Clients from './Clients.jsx';
@@ -9,16 +9,22 @@ import Programs from './Programs.jsx';
 import Library from './Library.jsx';
 import Agenda from './Agenda.jsx';
 import Settings from './Settings.jsx';
+import Leads from './Leads.jsx';
+import Payments from './Payments.jsx';
+import GlobalSearch from './GlobalSearch.jsx';
+import { commitment } from '../lib/domain.js';
 
 const Ctx = createContext(null);
 export const useCoach = () => useContext(Ctx);
 
 const PAGES = [
   ['inicio', 'Inicio'],
+  ['agenda', 'Agenda'],
   ['clientes', 'Jugadores'],
   ['programacion', 'Programación'],
   ['biblioteca', 'Biblioteca'],
-  ['agenda', 'Agenda'],
+  ['solicitudes', 'Solicitudes'],
+  ['pagos', 'Pagos'],
   ['ajustes', 'Marca y cuenta'],
 ];
 
@@ -38,6 +44,9 @@ function useHashRoute() {
   return [r, go];
 }
 
+// Si una tabla aún no existe, la app sigue funcionando sin ella
+const soft = (b) => ({ then: (ok) => b.then(({ data, error }) => ({ data: error ? [] : data, error: null })).then(ok) });
+
 export default function CoachApp({ session, onLogout, canSwitch, onSwitch }) {
   const uid = session.user.id;
   const [route, go] = useHashRoute();
@@ -56,7 +65,13 @@ export default function CoachApp({ session, onLogout, canSwitch, onSwitch }) {
       checkins: () => supabase.from('checkins').select('*').gte('date', since).order('date'),
       logs: () => supabase.from('session_logs').select('*').gte('date', since).order('date'),
       // Si la tabla de alertas aún no existe, la app sigue funcionando sin ella
-      alertActions: () => ({ then: (ok) => supabase.from('alert_actions').select('*').then(({ data, error }) => ({ data: error ? [] : data, error: null })).then(ok) }),
+      alertActions: () => soft(supabase.from('alert_actions').select('*')),
+      evolution: () => soft(supabase.from('evolution').select('*').order('date', { ascending: false }).order('created_at', { ascending: false })),
+      tests: () => soft(supabase.from('tests').select('*').order('date').order('created_at')),
+      injuries: () => soft(supabase.from('injuries').select('*').order('date', { ascending: false })),
+      payments: () => soft(supabase.from('payments').select('*')),
+      leads: () => soft(supabase.from('leads').select('*').order('created_at', { ascending: false })),
+      blocks: () => soft(supabase.from('saved_blocks').select('*').order('name')),
     };
     const keys = only ? [].concat(only) : Object.keys(jobs);
     try {
@@ -100,6 +115,22 @@ export default function CoachApp({ session, onLogout, canSwitch, onSwitch }) {
         if (w != null && w <= 13) push(p, 'bienestar', `bienestar:${last.date}`, `bienestar bajo (${w}/25)`, 'warn', w <= 10);
       }
     });
+    // Fin del compromiso en 7 días o menos
+    d.players.filter((p) => !p.end_date && p.commitment_months).forEach((p) => {
+      const c = commitment(p);
+      if (!c.ends) return;
+      const left = daysBetween(new Date(), parseISO(c.ends));
+      if (left >= 0 && left <= 7) push(p, 'renov', `renov:${c.ends}`, `termina el compromiso de ${c.total} meses ${left === 0 ? 'hoy' : `en ${left} día${left === 1 ? '' : 's'}`}`, 'warn', false);
+    });
+    // Subida brusca de carga semanal (sRPE) respecto a la semana anterior. Orientativo.
+    const mon = (x) => { const t = new Date(x); t.setDate(t.getDate() - ((t.getDay() + 6) % 7)); return iso(t); };
+    const thisMon = mon(new Date()); const prevMon = iso(addDays(parseISO(thisMon), -7)); const lastMon = iso(addDays(parseISO(thisMon), -14));
+    d.players.filter((p) => !p.end_date && p.user_id).forEach((p) => {
+      const ls = d.logs.filter((l) => l.player_id === p.id);
+      const sum = (a, b) => ls.filter((l) => l.date >= a && l.date < b).reduce((s, l) => s + Number(l.srpe || 0), 0);
+      const prev = sum(lastMon, prevMon); const cur = sum(prevMon, thisMon);
+      if (prev > 0 && cur > prev * 1.3) push(p, 'carga', `carga:${prevMon}`, `carga de la semana pasada +${Math.round((cur / prev - 1) * 100)} % respecto a la anterior`, 'warn', false);
+    });
     const rank = { nueva: 0, pendiente: 1, gestionada: 2 };
     return out.sort((a, b) => rank[a.status] - rank[b.status] || (b.urgent - a.urgent));
   }, [d]);
@@ -117,9 +148,10 @@ export default function CoachApp({ session, onLogout, canSwitch, onSwitch }) {
   if (!d?.coach) return <Loading />;
 
   const ctx = { ...d, load, go, route, alerts, uid };
+  const newLeads = (d.leads || []).filter((l) => l.status === 'activa' && !l.stage).length;
   const coach = d.coach;
-  const Page = { inicio: Home, clientes: Clients, programacion: Programs, biblioteca: Library, agenda: Agenda, ajustes: Settings }[route.page];
-  const badge = { inicio: openAlerts, agenda: due };
+  const Page = { inicio: Home, clientes: Clients, programacion: Programs, biblioteca: Library, agenda: Agenda, ajustes: Settings, solicitudes: Leads, pagos: Payments }[route.page];
+  const badge = { inicio: openAlerts, agenda: due, solicitudes: newLeads };
 
   const Brand = (
     <div className="brand">
@@ -148,7 +180,10 @@ export default function CoachApp({ session, onLogout, canSwitch, onSwitch }) {
           </div>
         </aside>
         <header className="topbar">{Brand}<button className="btn sm" onClick={onLogout}>Salir</button></header>
-        <main className="main"><Page /></main>
+        <main className="main">
+          <div className="coachtop"><GlobalSearch /></div>
+          <Page />
+        </main>
         <nav className="bottomnav" aria-label="Secciones">
           {PAGES.map(([k, l]) => (
             <button key={k} type="button" aria-current={route.page === k ? 'page' : undefined} onClick={() => go(k)}>

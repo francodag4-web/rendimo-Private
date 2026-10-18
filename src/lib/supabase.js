@@ -25,6 +25,7 @@ export async function q(promise) {
 }
 
 function traducir(m = '') {
+  if (/duplicate key.*slug/i.test(m)) return 'Esa dirección ya la usa otro entrenador. Prueba otra.';
   if (/duplicate key.*email/i.test(m)) return 'Ya existe un jugador con ese correo.';
   if (/duplicate key.*name/i.test(m)) return 'Ya existe un ejercicio con ese nombre.';
   if (/duplicate key/i.test(m)) return 'Ese registro ya existe.';

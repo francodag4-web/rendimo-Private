@@ -8,6 +8,9 @@ import {
   PACK_TYPES, emptyItem, emptyPack, emptySession, emptyWeek, emptyPhase, emptyProgram,
   cloneWithNewIds, label, totalWeeks, setsPerMuscle, calendarWeekIdx,
 } from '../lib/program.js';
+import { clashes, SET_RANGE, evoLabel, flagLabel } from '../lib/domain.js';
+import { MUSCLES } from './Library.jsx';
+import Flag, { importantOf } from './Flag.jsx';
 
 export default function Programs() {
   const { route } = useCoach();
@@ -46,7 +49,30 @@ function ProgramList() {
           ))}
         </ul>
       ) : <Empty>{show === 'tpl' ? 'Aún no tienes plantillas. Crea la primera con «+ Nueva plantilla».' : 'Aún no has asignado programas. Abre una plantilla y pulsa «Asignar a jugador».'}</Empty>}
+      <SavedBlocks />
     </>
+  );
+}
+
+function SavedBlocks() {
+  const { blocks = [], load } = useCoach();
+  const act = useAction();
+  const toast = useToast();
+  const del = (b) => act(async () => {
+    await q(supabase.from('saved_blocks').delete().eq('id', b.id));
+    await load('blocks');
+    toast(`Bloque «${b.name}» eliminado.`, { undo: () => act(async () => { await q(supabase.from('saved_blocks').insert(b)); await load('blocks'); }) });
+  });
+  return (
+    <section className="panel stack">
+      <div><h3>Bloques guardados</h3><p className="muted small">Calentamientos, prevención, contrastes… Guárdalos desde cualquier bloque con «Guardar» y se insertan en cualquier sesión.</p></div>
+      {blocks.length ? (
+        <ul className="list">{blocks.map((b) => (
+          <li key={b.id}><span><b>{b.name}</b> <span className="muted small">· {b.data.type} · {(b.data.items || []).map((i) => i.exercise).filter(Boolean).join(' · ')}</span></span>
+            <button className="ib" aria-label={`Eliminar bloque ${b.name}`} onClick={() => del(b)}>✕</button></li>
+        ))}</ul>
+      ) : <Empty>Aún no has guardado ningún bloque.</Empty>}
+    </section>
   );
 }
 
@@ -55,7 +81,7 @@ const readClip = () => { try { return JSON.parse(localStorage.getItem('clip') ||
 const writeClip = (c) => { try { localStorage.setItem('clip', JSON.stringify(c)); } catch {} };
 
 function Editor({ id }) {
-  const { programs, players, exercises, uid, load, go } = useCoach();
+  const { programs, players, exercises, uid, load, go, blocks = [] } = useCoach();
   const act = useAction();
   const toast = useToast();
   const orig = programs.find((p) => p.id === id);
@@ -130,6 +156,8 @@ function Editor({ id }) {
   const weekNumber = phases.slice(0, pi).reduce((a, x) => a + x.weeks.length, 0) + wi + 1;
   const player = players.find((p) => p.id === prog.player_id);
   const muscles = setsPerMuscle(week, exMap);
+  const pflags = player?.flags || [];
+  const clash = (it) => (pflags.length && it.exercise ? clashes(pflags, it.exercise, exMap[it.exercise]).map((c) => c[1]).join(', ') : '');
 
   // Crea el ejercicio en la biblioteca desde el propio buscador
   const quickAdd = (name, type) => act(async () => {
@@ -147,7 +175,7 @@ function Editor({ id }) {
         <div style={{ flex: '1 1 320px' }}>
           <input aria-label="Nombre del programa" value={prog.name} onChange={(e) => commit({ ...prog, name: e.target.value })}
             style={{ fontFamily: 'var(--display)', fontSize: 26, fontWeight: 600, background: 'transparent', border: 'none', padding: 0 }} />
-          <p className="muted">{player ? <>Copia de <b>{player.name}</b></> : 'Plantilla'} · {totalWeeks(prog.data)} semanas · <span className="save">{status}</span></p>
+          <p className="muted">{player ? <>Copia de <b>{player.name}</b><Flag p={player} sm /></> : 'Plantilla'} · {totalWeeks(prog.data)} semanas · <span className="save">{status}</span></p>
         </div>
         <div className="row">
           {player && <label className="row small">Empieza el<input type="date" style={{ width: 'auto' }} value={prog.start_date || ''} onChange={(e) => commit({ ...prog, start_date: e.target.value || null })} /></label>}
@@ -157,6 +185,7 @@ function Editor({ id }) {
       </div>
 
       {!player && <Assign prog={prog} />}
+      {player && <PlayerContext player={player} />}
 
       {/* Fases */}
       <div className="row">
@@ -169,6 +198,9 @@ function Editor({ id }) {
         <div className="panel stack">
           <div className="row">
             <input aria-label="Nombre de la fase" style={{ maxWidth: 260 }} value={phase.name} onChange={(e) => mut((d) => { d.phases[pi].name = e.target.value; })} />
+            <button className="ib" aria-label="Mover fase antes" disabled={!pi} onClick={() => { mut((d) => { const a = d.phases; [a[pi - 1], a[pi]] = [a[pi], a[pi - 1]]; }); setPh(pi - 1); }}>↑</button>
+            <button className="ib" aria-label="Mover fase después" disabled={pi === phases.length - 1} onClick={() => { mut((d) => { const a = d.phases; [a[pi + 1], a[pi]] = [a[pi], a[pi + 1]]; }); setPh(pi + 1); }}>↓</button>
+            <button className="btn sm" onClick={() => { mut((d) => { const c = cloneWithNewIds(d.phases[pi]); c.name = `${c.name} (copia)`; d.phases.splice(pi + 1, 0, c); }); setPh(pi + 1); setWk(0); }}>Duplicar fase</button>
             {phases.length > 1 && <button className="btn sm danger" onClick={() => { delWithUndo((d) => d.phases.splice(pi, 1), `Fase «${phase.name}» eliminada.`); setPh(0); setWk(0); }}>Eliminar fase</button>}
           </div>
           {/* Semanas */}
@@ -176,7 +208,7 @@ function Editor({ id }) {
             <div className="weekbar">
               {phase.weeks.map((w, i) => {
                 const n = phases.slice(0, pi).reduce((a, x) => a + x.weeks.length, 0) + i + 1;
-                return <button key={w.id} aria-pressed={i === wi} onClick={() => setWk(i)}>Semana {n}</button>;
+                return <button key={w.id} aria-pressed={i === wi} onClick={() => setWk(i)}>Semana {n}{w.name ? ` · ${w.name}` : ''}</button>;
               })}
             </div>
             <div className="row">
@@ -185,6 +217,8 @@ function Editor({ id }) {
               {phase.weeks.length > 1 && <button className="btn sm danger" onClick={() => { delWithUndo((d) => d.phases[pi].weeks.splice(wi, 1), `Semana ${weekNumber} eliminada.`); setWk(Math.max(0, wi - 1)); }}>Eliminar semana</button>}
             </div>
           </div>
+          {week && <label className="row small">Nombre de la semana {weekNumber} (opcional)<input id="wk-name" aria-label="Nombre de la semana" list="wk-names" style={{ maxWidth: 220 }} placeholder="Ej. descarga, test, partido" value={week.name || ''} onChange={(e) => mut((d) => { W(d).name = e.target.value; })} /></label>}
+          <datalist id="wk-names"><option value="descarga" /><option value="test" /><option value="carga" /><option value="semana de partido" /><option value="vuelta" /></datalist>
         </div>
       )}
 
@@ -209,6 +243,7 @@ function Editor({ id }) {
                     <button className="ib" aria-label="Subir bloque" disabled={!k} onClick={() => mut((d) => { const a = W(d).sessions[si].packs; [a[k - 1], a[k]] = [a[k], a[k - 1]]; })}>↑</button>
                     <button className="ib" aria-label="Bajar bloque" disabled={k === s.packs.length - 1} onClick={() => mut((d) => { const a = W(d).sessions[si].packs; [a[k + 1], a[k]] = [a[k], a[k + 1]]; })}>↓</button>
                     <button className="btn sm" onClick={() => copy('pack', p, 'Bloque copiado.')}>Copiar</button>
+                    <SaveBlock pack={p} />
                     <button className="ib" aria-label="Eliminar bloque" onClick={() => delWithUndo((d) => W(d).sessions[si].packs.splice(k, 1), 'Bloque eliminado.')}>✕</button>
                   </header>
                   <div className="items">
@@ -216,7 +251,7 @@ function Editor({ id }) {
                     {p.items.map((it, j) => {
                       const set = (f) => (e) => mut((d) => { W(d).sessions[si].packs[k].items[j][f] = e.target.value; });
                       return (
-                        <div className="item" key={it.id}>
+                        <div className={'item' + (clash(it) ? ' clash' : '')} key={it.id} title={clash(it) ? 'Choca con: ' + clash(it) : undefined}>
                           <span className="lb">{label(k, j)}</span>
                           <ExercisePicker className="ex" value={it.exercise} exercises={exercises}
                             onChange={(v) => mut((d) => { W(d).sessions[si].packs[k].items[j].exercise = v; })}
@@ -238,6 +273,11 @@ function Editor({ id }) {
                 <select aria-label="Tipo del nuevo bloque" id={'nb-' + s.id} style={{ width: 'auto' }} defaultValue="Fuerza">{PACK_TYPES.map((t) => <option key={t}>{t}</option>)}</select>
                 <button className="btn sm" onClick={() => mut((d) => W(d).sessions[si].packs.push(emptyPack(document.getElementById('nb-' + s.id).value)))}>+ Bloque</button>
                 {clip?.kind === 'pack' && <button className="btn sm" onClick={() => mut((d) => W(d).sessions[si].packs.push(cloneWithNewIds(clip.data)))}>Pegar bloque ({clip.data.type})</button>}
+                {blocks.length > 0 && (
+                  <select aria-label="Insertar bloque guardado" style={{ width: 'auto' }} value="" onChange={(e) => { const b = blocks.find((x) => x.id === e.target.value); if (b) { mut((d) => W(d).sessions[si].packs.push(cloneWithNewIds(b.data))); toast(`«${b.name}» insertado.`); } }}>
+                    <option value="">Insertar bloque guardado…</option>{blocks.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+                  </select>
+                )}
               </div>
             </section>
           ))}
@@ -246,13 +286,7 @@ function Editor({ id }) {
             {clip?.kind === 'session' && <button className="btn" onClick={() => mut((d) => W(d).sessions.push(cloneWithNewIds(clip.data)))}>Pegar sesión ({clip.data.name || DAYS[clip.data.day - 1]})</button>}
           </div>
           {!week.sessions.length && <Empty>Semana sin sesiones. Añade una con «+ Sesión».</Empty>}
-          {Object.keys(muscles).length > 0 && (
-            <div className="panel stack">
-              <h3>Series semanales por músculo · semana {weekNumber}</h3>
-              <p className="muted small">Principal cuenta 1 serie y secundario 0,5 (Pelland et al., 2025). Para hipertrofia, unas 10 o más series semanales por músculo suelen funcionar mejor que menos (Schoenfeld et al., 2017).</p>
-              <div className="row">{Object.entries(muscles).sort((a, b) => b[1] - a[1]).map(([m, v]) => <span key={m} className={'pill ' + (v >= 10 ? 'ok' : v >= 5 ? 'brand' : '')}>{m} {v.toString().replace('.', ',')}</span>)}</div>
-            </div>
-          )}
+          <MuscleBars muscles={muscles} title={`Series por músculo · ${phase.name} · semana ${weekNumber}${week.name ? ' · ' + week.name : ''}`} />
         </>
       )}
 
@@ -303,5 +337,72 @@ function Danger({ prog }) {
       {c ? <span className="row"><span className="small">¿Eliminar este programa?</span><button className="btn danger" onClick={del}>Sí, eliminar</button><button className="btn" onClick={() => setC(false)}>No</button></span>
         : <button className="btn danger" onClick={() => setC(true)}>Eliminar programa</button>}
     </div>
+  );
+}
+
+// Lo importante del jugador y su evolución reciente, delante al programar
+function PlayerContext({ player }) {
+  const { notes, evolution = [], go } = useCoach();
+  const items = importantOf(player, notes);
+  const evo = evolution.filter((e) => e.player_id === player.id).slice(0, 3);
+  const first = player.name.split(' ')[0];
+  return (
+    <div className="grid2">
+      <div className="notebox stack">
+        <b>! Notas importantes de {first}</b>
+        {items.length ? <ul style={{ margin: 0, paddingLeft: 18 }}>{items.map((t, i) => <li key={i}>{t}</li>)}</ul> : <span className="muted small">Nada marcado. Añádelo en su ficha (Datos o Notas).</span>}
+        {(player.flags || []).length > 0 && <span className="small">Los ejercicios marcados en amarillo chocan con: {(player.flags || []).map(flagLabel).join(', ')}.</span>}
+      </div>
+      <div className="evobox stack">
+        <div className="between"><b>Evolución reciente de {first}</b><button className="btn ghost sm" onClick={() => go('clientes', player.id)}>Ver todo</button></div>
+        {evo.length ? evo.map((e) => (
+          <div key={e.id}><span className={'cat cat-' + e.category}>{evoLabel(e.category)}</span> <span className="muted small">{fmtDate(e.date)}</span><div>{e.text}</div></div>
+        )) : <span className="muted small">Sin entradas todavía.</span>}
+      </div>
+    </div>
+  );
+}
+
+// Series semanales por músculo con la franja objetivo
+function MuscleBars({ muscles, title }) {
+  const all = [...new Set([...MUSCLES, ...Object.keys(muscles)])];
+  if (!Object.keys(muscles).length) return null;
+  const [lo, hi] = SET_RANGE;
+  const max = Math.max(hi * 1.25, ...Object.values(muscles));
+  const pct = (v) => `${Math.min(100, (v / max) * 100)}%`;
+  return (
+    <div className="panel stack">
+      <h3>{title}</h3>
+      <p className="muted small">Principal cuenta 1 serie y secundario 0,5 (Pelland et al., 2025); las vueltas del bloque multiplican. Franja verde = {lo}-{hi} series semanales, lo habitual para hipertrofia (Schoenfeld et al., 2017). En fases de fuerza o potencia puede ser menos.</p>
+      <div className="stack" style={{ gap: 8 }}>
+        {all.map((m) => {
+          const v = muscles[m] || 0;
+          const col = v > hi ? 'var(--bad)' : v >= lo ? 'var(--ok)' : 'var(--warn)';
+          return (
+            <div className="mbar" key={m}>
+              <span>{m}</span>
+              <span className="track" role="img" aria-label={`${m}: ${v} series`}>
+                <span className="range" style={{ left: pct(lo), width: `calc(${pct(hi)} - ${pct(lo)})` }} />
+                <span className="val" style={{ width: pct(v), background: col }} />
+              </span>
+              <b className="num" style={{ textAlign: 'right' }}>{v.toFixed(1).replace('.', ',')}</b>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function SaveBlock({ pack }) {
+  const { uid, load } = useCoach();
+  const act = useAction();
+  const [name, setName] = useState(null);
+  if (name == null) return <button className="btn sm" onClick={() => setName(pack.type)}>Guardar</button>;
+  return (
+    <form className="row" onSubmit={(e) => { e.preventDefault(); act(async () => { await q(supabase.from('saved_blocks').insert({ coach_id: uid, name: name.trim() || pack.type, data: cloneWithNewIds(pack) })); await load('blocks'); setName(null); }, 'Bloque guardado. Lo tienes en «Insertar bloque guardado».'); }}>
+      <input aria-label="Nombre del bloque" autoFocus style={{ width: 170 }} value={name} onChange={(e) => setName(e.target.value)} />
+      <button className="btn sm pri" type="submit">OK</button><button type="button" className="btn sm" onClick={() => setName(null)}>✕</button>
+    </form>
   );
 }

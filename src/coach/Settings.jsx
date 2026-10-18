@@ -8,7 +8,7 @@ import { useAction } from '../ui/ui.jsx';
 export default function Settings() {
   const { coach, load } = useCoach();
   const act = useAction();
-  const [f, setF] = useState({ brand_name: coach.brand_name, brand_short: coach.brand_short || '', color: coach.color, logo: coach.logo, whatsapp: coach.whatsapp || '', instagram: coach.instagram || '' });
+  const [f, setF] = useState({ brand_name: coach.brand_name, brand_short: coach.brand_short || '', color: coach.color, logo: coach.logo, whatsapp: coach.whatsapp || '', instagram: coach.instagram || '', slug: coach.slug || '' });
   const [pw, setPw] = useState('');
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   const onLogo = async (e) => {
@@ -19,7 +19,7 @@ export default function Settings() {
   const save = (e) => {
     e.preventDefault();
     act(async () => {
-      await q(supabase.from('coaches').update({ brand_name: f.brand_name.trim() || 'Mi marca', brand_short: f.brand_short.trim() || null, color: f.color, logo: f.logo || null, whatsapp: f.whatsapp || null, instagram: f.instagram.replace(/^@/, '').trim() || null }).eq('id', coach.id));
+      await q(supabase.from('coaches').update({ brand_name: f.brand_name.trim() || 'Mi marca', brand_short: f.brand_short.trim() || null, color: f.color, logo: f.logo || null, whatsapp: f.whatsapp || null, instagram: f.instagram.replace(/^@/, '').trim() || null, slug: f.slug.replace(/^-+|-+$/g, '') || null }).eq('id', coach.id));
       await load('coach');
       applyBrand(f.color);
     }, 'Marca guardada. Tus jugadores ya la ven.');
@@ -41,6 +41,10 @@ export default function Settings() {
           {f.logo && <div className="row"><img src={f.logo} alt="Logo" style={{ width: 64, height: 64, objectFit: 'contain', background: 'var(--soft)', borderRadius: 10 }} /><button type="button" className="btn sm" onClick={() => setF({ ...f, logo: null })}>Quitar logo</button></div>}
           <label className="f">Tu WhatsApp (para que los jugadores te escriban)<input value={f.whatsapp} onChange={set('whatsapp')} placeholder="34600111222" /></label>
           <label className="f">Tu Instagram (sale en el pie de la app de tus jugadores)<input id="b-ig" value={f.instagram} onChange={set('instagram')} placeholder="@francoalderete.pf" /></label>
+          <label className="f">Dirección de tu formulario de solicitudes (solo letras, números y guiones)
+            <input id="b-slug" value={f.slug} onChange={(e) => setF({ ...f, slug: e.target.value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').slice(0, 40) })} placeholder="frp" />
+          </label>
+          {f.slug && <span className="muted small">Se verá en: {window.location.origin}/#/s/{f.slug}</span>}
           <div className="row"><button className="btn pri" type="submit">Guardar marca</button></div>
         </form>
         <div className="stack">

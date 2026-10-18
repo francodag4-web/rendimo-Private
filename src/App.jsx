@@ -5,6 +5,7 @@ import CoachApp from './coach/CoachApp.jsx';
 import PlayerApp from './player/PlayerApp.jsx';
 import Consent from './player/Consent.jsx';
 import { Loading } from './ui/ui.jsx';
+import PublicLead from './PublicLead.jsx';
 
 // Aplica el color de la marca del entrenador a toda la app
 export function applyBrand(color) {
@@ -16,6 +17,13 @@ export function applyBrand(color) {
 }
 
 export default function App() {
+  // Formulario público de solicitudes: #/s/<dirección del entrenador>
+  const pub = window.location.hash.match(/^#\/s\/([a-z0-9-]+)/i);
+  if (pub) return <PublicLead slug={pub[1].toLowerCase()} />;
+  return <Private />;
+}
+
+function Private() {
   const [session, setSession] = useState(undefined);
   const [access, setAccess] = useState(null); // {coach, player}
   const [mode, setMode] = useState(null); // 'coach' | 'player'
