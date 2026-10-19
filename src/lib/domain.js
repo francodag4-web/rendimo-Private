@@ -104,6 +104,47 @@ export const TEST_PRESETS = [
   ['Salto a una pierna', 'cm', 'mas', true], ['Peso corporal', 'kg', 'mas', false],
   ['Salto horizontal', 'cm', 'mas', false], ['Illinois', 's', 'menos', false], ['30-15 IFT', 'km/h', 'mas', false],
 ];
+// Cualidad, ejemplo de cómo apuntarlo y rango habitual (para avisar de errores al teclear, p. ej. mm en vez de cm)
+export const TEST_INFO = {
+  'CMJ': ['Salto', 'Ej. 38,5 → mejor de 3 intentos, en cm', [10, 80]],
+  'Salto a una pierna': ['Salto', 'Ej. 22 → cm de cada pierna', [3, 50]],
+  'Salto horizontal': ['Salto', 'Ej. 235 → cm desde la línea al talón', [100, 350]],
+  'Sprint 10 m': ['Velocidad', 'Ej. 1,82 → segundos con 2 decimales', [1.4, 3]],
+  'Sprint 30 m': ['Velocidad', 'Ej. 4,35 → segundos con 2 decimales', [3.5, 7]],
+  '505 cambio de dirección': ['Agilidad', 'Ej. 2,35 → segundos de cada lado', [1.8, 4]],
+  'Illinois': ['Agilidad', 'Ej. 16,2 → segundos', [13, 25]],
+  'Yo-Yo IR1': ['Resistencia', 'Ej. 1520 → metros totales recorridos', [80, 3600]],
+  'Bronco': ['Resistencia', 'Ej. 5:10 (min:seg) o 310 (segundos)', [200, 480]],
+  '30-15 IFT': ['Resistencia', 'Ej. 19,5 → km/h de la última etapa completada', [12, 25]],
+  '1RM sentadilla': ['Fuerza', 'Ej. 120 → kg, real o estimado', [20, 350]],
+  '1RM press banca': ['Fuerza', 'Ej. 90 → kg, real o estimado', [15, 250]],
+  '1RM peso muerto hexagonal': ['Fuerza', 'Ej. 150 → kg, real o estimado', [20, 400]],
+  'Dominadas máximas': ['Fuerza', 'Ej. 12 → repeticiones completas', [0, 60]],
+  'Nordic isquios': ['Fuerza', 'Ej. 320 → N de cada pierna', [50, 800]],
+  'Aductores (squeeze)': ['Fuerza', 'Ej. 350 → N, rodillas a 45°', [50, 800]],
+  'Rotación interna hombro': ['Movilidad', 'Ej. 55 → grados con goniómetro, cada lado', [0, 120]],
+  'Rotación externa hombro': ['Movilidad', 'Ej. 95 → grados con goniómetro, cada lado', [20, 160]],
+  'Peso corporal': ['Composición', 'Ej. 82,4 → kg, en ayunas', [30, 180]],
+};
+export const TEST_CATS = ['Resistencia', 'Salto', 'Fuerza', 'Agilidad', 'Velocidad', 'Movilidad', 'Composición'];
+export const UNITS = [['cm', 'cm'], ['m', 'm'], ['s', 's (segundos)'], ['kg', 'kg'], ['reps', 'repeticiones'], ['N', 'N (newtons)'], ['°', '° (grados)'], ['km/h', 'km/h'], ['ml/kg/min', 'ml/kg/min'], ['%', '%'], ['W', 'W (vatios)'], ['m/s', 'm/s']];
+const UNIT_HINT = { cm: 'Ej. 35,5', m: 'Ej. 1520', s: 'Ej. 1,85 o 5:10 (min:seg)', kg: 'Ej. 82,5', reps: 'Ej. 12', N: 'Ej. 320', '°': 'Ej. 55', 'km/h': 'Ej. 19,5', 'ml/kg/min': 'Ej. 52,3', '%': 'Ej. 12,5', W: 'Ej. 850', 'm/s': 'Ej. 0,85' };
+export const testHint = (name, unit) => TEST_INFO[name]?.[1] || UNIT_HINT[unit] || 'Número con coma para los decimales';
+// «1,85» → 1.85 · «5:10» → 310 (min:seg) · vacío → null
+export const parseTestValue = (v) => {
+  const t = String(v ?? '').trim();
+  if (!t) return null;
+  const m = t.match(/^(\d+):(\d{1,2}(?:[.,]\d+)?)$/);
+  if (m) return Number(m[1]) * 60 + Number(m[2].replace(',', '.'));
+  const n = Number(t.replace(',', '.'));
+  return Number.isFinite(n) ? n : NaN;
+};
+// Aviso si el valor se sale de lo habitual para ese test
+export const testWarn = (name, unit, value) => {
+  const r = TEST_INFO[name]?.[2]; const pr = presetOf(name);
+  if (!r || value == null || Number.isNaN(value) || (pr && unit && pr[1] !== unit)) return null;
+  return value < r[0] || value > r[1] ? `Revisa el valor: en ${name} lo habitual es entre ${String(r[0]).replace('.', ',')} y ${String(r[1]).replace('.', ',')} ${pr?.[1] || ''}.` : null;
+};
 export const presetOf = (name) => TEST_PRESETS.find((t) => norm(t[0]) === norm(name || ''));
 export const fmtNum = (v, d = 2) => (v == null || v === '' ? '—' : Number(v).toLocaleString('es-ES', { maximumFractionDigits: d }));
 // Valor de un registro: media de ambos lados si es bilateral

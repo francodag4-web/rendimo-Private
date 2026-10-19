@@ -9,7 +9,7 @@ import { calendarWeekIdx, totalWeeks } from '../lib/program.js';
 import { assignTemplates, SelBar } from './Programs.jsx';
 import {
   PLANS, defaultPlan, planOptions, planPatch, feeLabel, planDefaults, feeText, commitment, reviewInfo, REVIEW_OPTIONS, SCREENING, wellLevel, monthKey,
-  TEST_PRESETS, presetOf, fmtNum, testValue, asym, testSummary, severity, INJ_STATUS, SIDES, ZONES, zoneName,
+  TEST_PRESETS, TEST_INFO, TEST_CATS, UNITS, testHint, testWarn, parseTestValue, presetOf, fmtNum, testValue, asym, testSummary, severity, INJ_STATUS, SIDES, ZONES, zoneName,
   FLAGS, EVO_CATS, evoLabel, isRecord, payCover,
 } from '../lib/domain.js';
 import Flag from './Flag.jsx';
@@ -400,20 +400,32 @@ function Tests({ p }) {
   const toast = useToast();
   const mine = tests.filter((t) => t.player_id === p.id);
   const sums = testSummary(mine);
-  const [f, setF] = useState({ date: iso(), test: 'CMJ', unit: 'cm', better: 'mas', bilateral: false, value: '', value_r: '', note: '' });
-  const pickTest = (name) => { const pr = presetOf(name); setF({ ...f, test: name, ...(pr ? { unit: pr[1], better: pr[2], bilateral: pr[3] } : {}) }); };
-  const num = (v) => (v === '' || v == null ? null : Number(String(v).replace(',', '.')));
+  const [f, setF] = useState({ date: iso(), test: 'CMJ', custom: false, unit: 'cm', otherUnit: false, better: 'mas', bilateral: false, value: '', value_r: '', note: '' });
+  // Tests propios que ya ha usado con este cliente (aparecen en el desplegable)
+  const own = [...new Set(mine.map((t) => t.test))].filter((n) => !presetOf(n));
+  const pickTest = (name) => {
+    if (name === '__new') return setF({ ...f, custom: true, test: '', unit: 'cm', otherUnit: false, better: 'mas', bilateral: false });
+    const pr = presetOf(name); const prev = mine.filter((t) => t.test === name).pop();
+    setF({ ...f, custom: false, test: name, otherUnit: false, ...(pr ? { unit: pr[1], better: pr[2], bilateral: pr[3] } : prev ? { unit: prev.unit || '', better: prev.better, bilateral: prev.value_r != null } : {}) });
+  };
+  const pickUnit = (u) => setF({ ...f, otherUnit: u === '__otra', unit: u === '__otra' ? '' : u });
+  const num = (v) => { const n = parseTestValue(v); if (Number.isNaN(n)) throw new Error('El valor tiene que ser un número (usa coma para los decimales) o min:seg.'); return n; };
+  const hint = testHint(f.test, f.unit);
+  const warn = (() => { try { return testWarn(f.test, f.unit, parseTestValue(f.value)) || (f.bilateral ? testWarn(f.test, f.unit, parseTestValue(f.value_r)) : null); } catch { return null; } })();
+  const knownUnit = UNITS.some(([u]) => u === f.unit);
   const add = (e) => {
     e.preventDefault();
     act(async () => {
+      if (!f.test.trim()) throw new Error('Elige un test o escribe el nombre del nuevo.');
       const row = { coach_id: uid, player_id: p.id, date: f.date, test: f.test.trim(), unit: f.unit || null, better: f.better, value: num(f.value), value_r: f.bilateral ? num(f.value_r) : null, note: f.note || null };
       if (row.value == null && row.value_r == null) throw new Error('Pon al menos un valor.');
       const prev = testSummary(mine).find((s) => s.name === row.test);
       const saved = await q(supabase.from('tests').insert(row).select().single());
+      // Vacía solo lo de este registro, sin pisar lo que se esté escribiendo ya para el siguiente
+      setF((x) => (x.value === f.value && x.value_r === f.value_r ? { ...x, value: '', value_r: '', note: '' } : x));
       const v = testValue(saved);
       const txt = `${row.test} ${fmtNum(v)} ${row.unit || ''}${row.value_r != null ? ` (izq. ${fmtNum(row.value)} · der. ${fmtNum(row.value_r)})` : ''}${prev ? ` · antes ${fmtNum(prev.v1)}` : ''}.`;
       await q(supabase.from('evolution').insert({ coach_id: uid, player_id: p.id, date: f.date, category: 'test', text: txt }));
-      setF({ ...f, value: '', value_r: '', note: '' });
       await load(['tests', 'evolution']);
       if (isRecord(saved, [...tests, saved])) toast('¡Nueva marca! Sale en Inicio para que le felicites.');
     }, 'Test guardado y añadido a su evolución.');
@@ -430,18 +442,31 @@ function Tests({ p }) {
         <h3>Nuevo registro</h3>
         <div className="row">
           <input aria-label="Fecha" type="date" required style={{ width: 'auto' }} value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} />
-          <input id="t-name" aria-label="Test" list="test-presets" required style={{ flex: '1 1 180px' }} value={f.test} onChange={(e) => pickTest(e.target.value)} placeholder="Test" />
-          <datalist id="test-presets">{TEST_PRESETS.map((t) => <option key={t[0]} value={t[0]} />)}</datalist>
-          <input aria-label="Unidad" style={{ width: 70 }} value={f.unit} onChange={(e) => setF({ ...f, unit: e.target.value })} placeholder="Unidad" />
-          <select aria-label="Mejor si" style={{ width: 'auto' }} value={f.better} onChange={(e) => setF({ ...f, better: e.target.value })}><option value="mas">Mejor más alto</option><option value="menos">Mejor más bajo</option></select>
+          <select id="t-sel" aria-label="Test" style={{ flex: '1 1 200px', width: 'auto' }} value={f.custom ? '__new' : f.test} onChange={(e) => pickTest(e.target.value)}>
+            {TEST_CATS.map((c) => {
+              const list = TEST_PRESETS.filter((t) => (TEST_INFO[t[0]]?.[0] || 'Fuerza') === c);
+              return list.length ? <optgroup key={c} label={c}>{list.map((t) => <option key={t[0]} value={t[0]}>{t[0]}</option>)}</optgroup> : null;
+            })}
+            {own.length > 0 && <optgroup label="Tus tests">{own.map((n) => <option key={n} value={n}>{n}</option>)}</optgroup>}
+            <option value="__new">+ Crear test nuevo…</option>
+          </select>
+          {f.custom && <input id="t-name" aria-label="Nombre del test nuevo" required autoFocus style={{ flex: '1 1 180px' }} value={f.test} onChange={(e) => setF({ ...f, test: e.target.value })} placeholder="Nombre del test nuevo" />}
+          <select id="t-unit" aria-label="Unidad" style={{ width: 'auto' }} value={f.otherUnit || (!knownUnit && f.unit) ? '__otra' : f.unit} onChange={(e) => pickUnit(e.target.value)}>
+            {UNITS.map(([u, l]) => <option key={u} value={u}>{l}</option>)}
+            <option value="__otra">Otra…</option>
+          </select>
+          {(f.otherUnit || (!knownUnit && f.unit)) && <input aria-label="Otra unidad" style={{ width: 90 }} value={f.unit} onChange={(e) => setF({ ...f, unit: e.target.value })} placeholder="Unidad" />}
+          {f.custom && <select aria-label="Mejor si" style={{ width: 'auto' }} value={f.better} onChange={(e) => setF({ ...f, better: e.target.value })}><option value="mas">Mejor más alto</option><option value="menos">Mejor más bajo</option></select>}
           <label className="row small"><input type="checkbox" style={{ width: 'auto' }} checked={f.bilateral} onChange={(e) => setF({ ...f, bilateral: e.target.checked })} /> Por lados</label>
         </div>
         <div className="row">
-          <input id="t-val" aria-label={f.bilateral ? 'Izquierda' : 'Valor'} inputMode="decimal" style={{ width: 120 }} placeholder={f.bilateral ? 'Izquierda' : 'Valor'} value={f.value} onChange={(e) => setF({ ...f, value: e.target.value })} />
-          {f.bilateral && <input aria-label="Derecha" inputMode="decimal" style={{ width: 120 }} placeholder="Derecha" value={f.value_r} onChange={(e) => setF({ ...f, value_r: e.target.value })} />}
+          <input id="t-val" aria-label={f.bilateral ? 'Izquierda' : 'Valor'} inputMode="decimal" style={{ width: 130 }} placeholder={f.bilateral ? 'Izquierda' : 'Valor'} value={f.value} onChange={(e) => setF({ ...f, value: e.target.value })} />
+          {f.bilateral && <input aria-label="Derecha" inputMode="decimal" style={{ width: 130 }} placeholder="Derecha" value={f.value_r} onChange={(e) => setF({ ...f, value_r: e.target.value })} />}
           <input aria-label="Nota" style={{ flex: '1 1 200px' }} placeholder="Nota (opcional)" value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} />
           <button className="btn pri" type="submit">Guardar</button>
         </div>
+        <p className="small muted" id="t-hint">Formato: {hint}{!f.custom && presetOf(f.test) ? ` · ${presetOf(f.test)[2] === 'menos' ? 'mejor cuanto más bajo' : 'mejor cuanto más alto'}` : ''}</p>
+        {warn && <p className="small" role="alert" style={{ color: 'var(--warn)' }}>{warn}</p>}
       </form>
       {sums.length ? (
         <div className="panel tablewrap">
