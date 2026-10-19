@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { useCoach } from './CoachApp.jsx';
 import { supabase, q } from '../lib/supabase.js';
 import { matches, iso, fmtDate, DAYS, addDays, mondayOf } from '../lib/util.js';
-import { useAction, useToast, Empty, Tabs } from '../ui/ui.jsx';
+import { useAction, useToast, Empty, Tabs, Loading } from '../ui/ui.jsx';
 import ExercisePicker from './ExercisePicker.jsx';
 import {
   PACK_TYPES, emptyItem, emptyPack, emptySession, emptyWeek, emptyPhase, emptyProgram,
@@ -119,6 +119,19 @@ function Editor({ id }) {
     }
   }, []);
 
+  // Si el programa aún no está en la lista (recién creado o lista desactualizada), lo trae directamente
+  const [missing, setMissing] = useState(false);
+  useEffect(() => {
+    if (prog) return undefined;
+    if (orig) { setProg(orig); latest.current = orig; return undefined; }
+    let off = false;
+    supabase.from('programs').select('*').eq('id', id).limit(1).then(({ data }) => {
+      if (off) return;
+      if (data?.[0]) { setProg(data[0]); latest.current = data[0]; load('programs'); } else setMissing(true);
+    });
+    return () => { off = true; };
+  }, [orig, prog, id]);
+
   const persist = useCallback(async (p) => {
     pending.current = false;
     setStatus('Guardando…');
@@ -156,6 +169,7 @@ function Editor({ id }) {
   const exMap = useMemo(() => Object.fromEntries(exercises.map((e) => [e.name, e])), [exercises]);
   const club = useClub(orig?.player_id);
 
+  if (!prog && !missing) return <Loading />;
   if (!prog) return <Empty>No se encuentra este programa. <button className="btn sm" onClick={() => go('programacion')}>Volver</button></Empty>;
 
   // Mutación inmutable sencilla: clona y aplica

@@ -142,7 +142,7 @@ function PlayerDetail({ id }) {
   const p = players.find((x) => x.id === id);
   const [tab, setTab] = useState('resumen');
   const [waOpen, setWaOpen] = useState(false);
-  if (!p) return <Empty>No se encuentra este jugador. <button className="btn sm" onClick={() => go('clientes')}>Volver</button></Empty>;
+  if (!p) return <MissingPlayer id={id} />;
   const upd = (patch, msg) => act(async () => { await q(supabase.from('players').update(patch).eq('id', p.id)); await load('players'); }, msg);
   const scr = SCREENING.find((s) => s[0] === (p.screening || 'pendiente')) || SCREENING[0];
   const r = reviewInfo(p);
@@ -590,4 +590,13 @@ function WaComposer({ p, kinds }) {
       <div className="row"><a className="btn pri" target="_blank" rel="noopener" href={waURL(p.phone, text)}><WAIcon /> Abrir en WhatsApp</a><span className="muted small">Puedes retocarlo antes de enviarlo.</span></div>
     </div>
   );
+}
+
+// Jugador que aún no está en la lista: recarga una vez antes de decir que no existe
+function MissingPlayer({ id }) {
+  const { load, go } = useCoach();
+  const [tried, setTried] = useState(false);
+  useEffect(() => { let off = false; load('players').finally(() => { if (!off) setTried(true); }); return () => { off = true; }; }, [id]);
+  if (!tried) return <p className="muted">Cargando…</p>;
+  return <Empty>No se encuentra este jugador. <button className="btn sm" onClick={() => go('clientes')}>Volver</button></Empty>;
 }
