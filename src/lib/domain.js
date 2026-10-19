@@ -102,6 +102,7 @@ export const TEST_PRESETS = [
   ['1RM peso muerto hexagonal', 'kg', 'mas', false], ['Dominadas máximas', 'reps', 'mas', false], ['Rotación interna hombro', '°', 'mas', true],
   ['Rotación externa hombro', '°', 'mas', true], ['Nordic isquios', 'N', 'mas', true], ['Aductores (squeeze)', 'N', 'mas', false],
   ['Salto a una pierna', 'cm', 'mas', true], ['Peso corporal', 'kg', 'mas', false],
+  ['Salto horizontal', 'cm', 'mas', false], ['Illinois', 's', 'menos', false], ['30-15 IFT', 'km/h', 'mas', false],
 ];
 export const presetOf = (name) => TEST_PRESETS.find((t) => norm(t[0]) === norm(name || ''));
 export const fmtNum = (v, d = 2) => (v == null || v === '' ? '—' : Number(v).toLocaleString('es-ES', { maximumFractionDigits: d }));

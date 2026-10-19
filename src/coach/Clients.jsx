@@ -15,6 +15,7 @@ import {
 import Flag from './Flag.jsx';
 import { PlayerPrograms, Health, Notes } from './PlayerTabs.jsx';
 import WeekNoteEditor from './WeekNote.jsx';
+import TestRadar from '../ui/TestRadar.jsx';
 
 const END_REASONS = ['Objetivo cumplido', 'Precio', 'Falta de tiempo', 'Lesión', 'Se pasa a presencial', 'Sin respuesta', 'Otro'];
 
@@ -424,6 +425,7 @@ function Tests({ p }) {
   });
   return (
     <div className="stack">
+      {mine.length > 0 && <TestRadar tests={mine} storeKey={p.id} title={`Perfil de ${p.name.split(' ')[0]}`} />}
       <form className="panel stack" onSubmit={add}>
         <h3>Nuevo registro</h3>
         <div className="row">

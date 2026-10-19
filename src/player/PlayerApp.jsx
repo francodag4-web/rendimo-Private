@@ -4,6 +4,7 @@ import { supabase, q, PLATFORM, fetchAll } from '../lib/supabase.js';
 import { applyBrand } from '../App.jsx';
 import { useClub, clubDay, matchText } from '../lib/club.js';
 import ClubEditor from '../ui/ClubEditor.jsx';
+import TestRadar from '../ui/TestRadar.jsx';
 import { ThemePicker, Group, Row, PasswordForm, DeleteAccount, LegalRows, AppVersion } from '../ui/SettingsKit.jsx';
 import PlanCard from '../ui/PlanCard.jsx';
 import { iso, addDays, mondayOf, dow, DAYS, fmtDate, wellness, waURL, parseISO } from '../lib/util.js';
@@ -473,6 +474,7 @@ function Progress({ ctx }) {
           ))}</ul>
         </Hero>
       )}
+      {tests.length > 0 && <TestRadar tests={tests} storeKey={'yo:' + ctx.player.id} title="Mi perfil" />}
       {cur && cur.list.length > 1 && (
         <div className="panel stack">
           <div className="between"><h3>{cur.name} ({cur.unit || '—'})</h3>

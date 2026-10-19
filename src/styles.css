@@ -9,6 +9,7 @@
   --display:"Oswald","Arial Narrow",Arial,sans-serif;
   --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
   --r:14px;
+  --chart-a:#CF6A1F; --chart-b:#2B63B0;
   color-scheme:light;
 }
 /* Oscuro: si lo elige (data-theme=dark) o si está en Automático y el móvil está en oscuro */
@@ -17,12 +18,14 @@
   --ok:#7ED957; --warn:#E8B04A; --bad:#F07A70; --info:#7FB2FF;
   --t-green:#2C6E30; --t-red:#A93A33; --t-purple:#5B3E98; --t-orange:#B35C1B; --t-amber:#C98F1F; --t-teal:#136E60; --t-blue:#265696; --t-slate:#3D4A51;
   --brand-text:color-mix(in srgb,var(--brand) 82%,#fff);
+  --chart-a:#F2A65A; --chart-b:#7FB2FF;
   color-scheme:dark}}
 :root[data-theme=dark]{
   --bg:#0B130E; --surface:#131E17; --soft:#18251D; --ink:#E6EEE3; --muted:#9FB0A2; --line:#24332A;
   --ok:#7ED957; --warn:#E8B04A; --bad:#F07A70; --info:#7FB2FF;
   --t-green:#2C6E30; --t-red:#A93A33; --t-purple:#5B3E98; --t-orange:#B35C1B; --t-amber:#C98F1F; --t-teal:#136E60; --t-blue:#265696; --t-slate:#3D4A51;
   --brand-text:color-mix(in srgb,var(--brand) 82%,#fff);
+  --chart-a:#F2A65A; --chart-b:#7FB2FF;
   color-scheme:dark}
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 var(--body)}
@@ -438,3 +441,17 @@ th{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--mute
 .pend{background:color-mix(in srgb,var(--warn) 25%,transparent);color:inherit;padding:0 4px;border-radius:4px}
 .legal-links{text-align:center}
 .legal-links a{color:inherit}
+
+/* Radar de tests */
+.radar-svg{width:100%;max-width:440px;margin:0 auto;display:block;overflow:visible}
+.radar .rg{fill:none;stroke:var(--line);stroke-width:1}
+.radar .ra{fill:color-mix(in srgb,var(--chart-a) 18%,transparent);stroke:var(--chart-a);stroke-width:2.5;stroke-linejoin:round}
+.radar .rb{fill:color-mix(in srgb,var(--chart-b) 22%,transparent);stroke:var(--chart-b);stroke-width:3;stroke-linejoin:round}
+.radar .rad{fill:var(--chart-a)}.radar .rbd{fill:var(--chart-b)}
+.radar .rl{fill:var(--ink);font:600 12.5px var(--body)}
+.radar-legend{justify-content:center;gap:18px}
+.radar-legend .sw{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-1px;margin-right:4px}
+.radar-legend .sw.a{background:var(--chart-a)}.radar-legend .sw.b{background:var(--chart-b)}
+.chipbtn{all:unset;cursor:pointer;padding:5px 10px;border-radius:999px;border:1px solid var(--line);background:var(--surface);font-size:13px}
+.chipbtn.on{border-color:var(--chart-b);background:color-mix(in srgb,var(--chart-b) 14%,var(--surface));font-weight:600}
+.chipbtn:focus-visible{outline:2px solid var(--brand)}
