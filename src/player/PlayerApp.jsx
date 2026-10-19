@@ -4,6 +4,7 @@ import { supabase, q, PLATFORM, fetchAll } from '../lib/supabase.js';
 import { applyBrand } from '../App.jsx';
 import { useClub, clubDay, matchText } from '../lib/club.js';
 import ClubEditor from '../ui/ClubEditor.jsx';
+import { ThemePicker, Group, Row, PasswordForm, DeleteAccount, LegalRows, AppVersion } from '../ui/SettingsKit.jsx';
 import PlanCard from '../ui/PlanCard.jsx';
 import { iso, addDays, mondayOf, dow, DAYS, fmtDate, wellness, waURL, parseISO } from '../lib/util.js';
 import { sessionsOfWeek, calendarWeekIdx, totalWeeks, label } from '../lib/program.js';
@@ -61,7 +62,7 @@ export default function PlayerApp({ player, session, onLogout, canSwitch, onSwit
           {d.coach?.logo ? <img src={d.coach.logo} alt="" /> : <span className="logo">{(d.coach?.brand_short || d.coach?.brand_name || 'R').slice(0, 2)}</span>}
           <div><b>{d.coach?.brand_name}</b><div className="small muted">{greet()}, {player.name.split(' ')[0]}</div></div>
         </div>
-        <button className="btn sm" aria-pressed={tab === 'cuenta'} onClick={() => setT(tab === 'cuenta' ? 'hoy' : 'cuenta')}>{tab === 'cuenta' ? 'Volver' : 'Mi cuenta'}</button>
+        <button className="btn sm" aria-pressed={tab === 'cuenta'} onClick={() => setT(tab === 'cuenta' ? 'hoy' : 'cuenta')}>{tab === 'cuenta' ? 'Volver' : 'Ajustes'}</button>
       </header>
       <div className="pwrap">
         <div className="pdate">{new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
@@ -106,120 +107,68 @@ function Footer({ coach }) {
   );
 }
 
-// Mi cuenta del cliente
+// Ajustes del cliente: agrupados como en los ajustes del móvil
 function Account({ ctx, session, onLogout, canSwitch, onSwitch }) {
   const { player, coach, checkins, logs } = ctx;
-  const act = useAction();
-  const [hasPw, setHasPw] = useState(!!session?.user?.user_metadata?.has_password);
-  const [pwOpen, setPwOpen] = useState(false);
-  const [pw, setPw] = useState('');
-  const [pw2, setPw2] = useState('');
-  const [showData, setShowData] = useState(false);
   const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
   const installed = window.matchMedia?.('(display-mode: standalone)').matches;
   const first = player.name.split(' ')[0];
   const coachName = coach?.brand_name || 'tu entrenador';
-
-  const savePw = (e) => {
-    e.preventDefault();
-    if (pw !== pw2) return act(async () => { throw new Error('Las dos contraseñas no coinciden.'); });
-    act(async () => {
-      const { error } = await supabase.auth.updateUser({ password: pw, data: { has_password: true } });
-      if (error) throw new Error(/different from the old/i.test(error.message) ? 'La nueva contraseña tiene que ser distinta de la anterior.' : error.message);
-      setPw(''); setPw2(''); setPwOpen(false); setHasPw(true);
-    }, 'Contraseña guardada. Ya puedes entrar con ella.');
-  };
-
-  const askData = (kind) => waURL(coach?.whatsapp, kind === 'copia'
-    ? `Hola, soy ${player.name}. Quería pedir una copia de los datos que guardas de mí en la app.`
-    : `Hola, soy ${player.name}. Quería pedir que borres mis datos de la app.`);
-
+  const askCopy = waURL(coach?.whatsapp, `Hola, soy ${player.name}. Quería pedir una copia de los datos que guardas de mí en la app.`);
   return (
-    <div className="stack">
-      <div><h2>Mi cuenta</h2><p className="muted">Tus datos, tu acceso y cómo contactar con {coachName}.</p></div>
-
-      <section className="panel stack">
-        <h3>Mis datos</h3>
-        <dl className="kv">
-          <dt>Nombre</dt><dd>{player.name}</dd>
-          <dt>Correo</dt><dd>{player.email}</dd>
-          {player.position && <><dt>Posición o deporte</dt><dd>{player.position}</dd></>}
-          {player.plan && <><dt>Plan</dt><dd>{player.plan}</dd></>}
-          {payState(ctx) && <><dt>Pago</dt><dd><span className={'pill ' + (payState(ctx).paid ? 'ok' : 'bad')}>{payState(ctx).text}</span></dd></>}
-          <dt>Con {coachName} desde</dt><dd>{fmtDate(player.start_date)}</dd>
-          <dt>Check-ins (90 días)</dt><dd className="num">{checkins.length}</dd>
-          <dt>Sesiones registradas</dt><dd className="num">{logs.length}</dd>
-        </dl>
-        <p className="muted small">¿Algún dato mal? Díselo a tu entrenador y lo corrige.</p>
-      </section>
-
-      <section className="panel stack">
-        <h3>Mi entrenador</h3>
-        <div className="row">
-          {coach?.logo ? <img src={coach.logo} alt="" style={{ width: 44, height: 44, objectFit: 'contain', borderRadius: 10, background: 'var(--soft)' }} /> : null}
-          <b>{coachName}</b>
-        </div>
-        <div className="row">
-          {coach?.whatsapp && <a className="btn pri" target="_blank" rel="noopener" href={waURL(coach.whatsapp, `Hola, soy ${first}. `)}><WAIcon /> Escribir por WhatsApp</a>}
-          {coach?.instagram && <a className="btn" target="_blank" rel="noopener" href={igURL(coach.instagram)}><IGIcon /> @{coach.instagram.replace(/^@/, '')}</a>}
-        </div>
-      </section>
-
-      <section className="panel stack">
-        <h3>Acceso</h3>
-        <div className="between">
-          <span>Contraseña</span>
-          {hasPw ? <span className="pill ok">Creada ✓</span> : <span className="pill">Sin contraseña</span>}
-        </div>
-        <p className="muted small">
-          {hasPw ? 'Puedes entrar con tu correo y contraseña, o pedir un enlace por correo.'
-            : 'Ahora entras con un enlace por correo. Si prefieres, crea una contraseña para entrar más rápido.'}
-        </p>
-        {pwOpen ? (
-          <form className="stack" style={{ gap: 8 }} onSubmit={savePw}>
-            <input id="pw-new" type="password" minLength={8} required autoComplete="new-password" placeholder="Nueva contraseña (mínimo 8 caracteres)" value={pw} onChange={(e) => setPw(e.target.value)} />
-            <input id="pw-rep" type="password" minLength={8} required autoComplete="new-password" placeholder="Repite la contraseña" value={pw2} onChange={(e) => setPw2(e.target.value)} />
-            <div className="row"><button className="btn pri" type="submit">Guardar contraseña</button><button type="button" className="btn" onClick={() => { setPwOpen(false); setPw(''); setPw2(''); }}>Cancelar</button></div>
-          </form>
-        ) : (
-          <div className="row"><button className="btn" onClick={() => setPwOpen(true)}>{hasPw ? 'Cambiar contraseña' : 'Crear contraseña'}</button></div>
+    <div className="setpage">
+      <div><h2>Ajustes</h2><p className="muted">Tu cuenta, cómo se ve la app y tus datos.</p></div>
+      <ThemePicker />
+      <Group title="Lo tuyo">
+        <Row icon="user" label="Mis datos" sub={player.plan || undefined}>
+          <dl className="kv">
+            <dt>Nombre</dt><dd>{player.name}</dd>
+            <dt>Correo</dt><dd>{player.email || session.user.email}</dd>
+            {player.position && <><dt>Posición o deporte</dt><dd>{player.position}</dd></>}
+            {player.plan && <><dt>Plan</dt><dd>{player.plan}</dd></>}
+            {payState(ctx) && <><dt>Pago</dt><dd><span className={'pill ' + (payState(ctx).paid ? 'ok' : 'bad')}>{payState(ctx).text}</span></dd></>}
+            <dt>Con {coachName} desde</dt><dd>{fmtDate(player.start_date)}</dd>
+            <dt>Check-ins (90 días)</dt><dd className="num">{checkins.length}</dd>
+            <dt>Sesiones registradas</dt><dd className="num">{logs.length}</dd>
+          </dl>
+          <p className="muted small">Algún dato mal? Díselo a tu entrenador y lo corrige.</p>
+        </Row>
+        <Row icon="chat" label="Mi entrenador" sub={coachName}>
+          <div className="row">
+            {coach?.whatsapp && <a className="btn pri" target="_blank" rel="noopener" href={waURL(coach.whatsapp, `Hola, soy ${first}. `)}><WAIcon /> Escribir por WhatsApp</a>}
+            {coach?.instagram && <a className="btn" target="_blank" rel="noopener" href={igURL(coach.instagram)}><IGIcon /> @{coach.instagram.replace(/^@/, '')}</a>}
+          </div>
+        </Row>
+        {!installed && (
+          <Row icon="phone" label="Tener la app en el móvil">
+            <p className="small">Añádela a tu pantalla de inicio y se abre como una app normal.</p>
+            {isIOS
+              ? <ol className="small" style={{ margin: 0, paddingLeft: 20 }}><li>Abre esta página en <b>Safari</b>.</li><li>Pulsa <b>Compartir</b> (cuadrado con flecha).</li><li>Elige <b>Añadir a pantalla de inicio</b>.</li></ol>
+              : <ol className="small" style={{ margin: 0, paddingLeft: 20 }}><li>Abre esta página en <b>Chrome</b>.</li><li>Pulsa el menú <b>⋮</b> arriba a la derecha.</li><li>Elige <b>Instalar app</b> o <b>Añadir a pantalla de inicio</b>.</li></ol>}
+          </Row>
         )}
-      </section>
-
-      {!installed && (
-        <section className="panel stack">
-          <h3>Tener la app en el móvil</h3>
-          <p className="small">Añádela a tu pantalla de inicio y se abre como una app normal, sin buscarla en el navegador.</p>
-          {isIOS
-            ? <ol className="small" style={{ margin: 0, paddingLeft: 20 }}><li>Abre esta página en <b>Safari</b>.</li><li>Pulsa el botón <b>Compartir</b> (cuadrado con flecha).</li><li>Elige <b>Añadir a pantalla de inicio</b>.</li></ol>
-            : <ol className="small" style={{ margin: 0, paddingLeft: 20 }}><li>Abre esta página en <b>Chrome</b>.</li><li>Pulsa el menú <b>⋮</b> arriba a la derecha.</li><li>Elige <b>Instalar app</b> o <b>Añadir a pantalla de inicio</b>.</li></ol>}
-        </section>
-      )}
-
-      <section className="panel stack">
-        <h3>Mis datos y privacidad</h3>
-        <p className="small">Consentimiento aceptado el <b>{fmtDate(player.consent_at)}</b>. Solo {coachName} ve tus datos, guardados cifrados en servidores de la Unión Europea.</p>
-        <button className="btn sm" style={{ justifySelf: 'start' }} aria-expanded={showData} onClick={() => setShowData(!showData)}>{showData ? 'Ocultar' : 'Qué datos se guardan'}</button>
-        {showData && (
+      </Group>
+      <Group title="Seguridad">
+        <Row icon="lock" label="Contraseña" sub="Crear o cambiar"><PasswordForm session={session} /></Row>
+      </Group>
+      <Group title="Privacidad">
+        <Row icon="data" label="Qué datos se guardan">
+          <p className="small">Consentimiento aceptado el <b>{fmtDate(player.consent_at)}</b>. Solo {coachName} ve tus datos, guardados en servidores de la Unión Europea.</p>
           <ul className="small" style={{ margin: 0, paddingLeft: 20 }}>
-            <li>Contacto y plan: nombre, correo, teléfono, posición.</li>
+            <li>Contacto y plan: nombre, correo, teléfono, posición o deporte.</li>
             <li>Entrenamiento: programas, sesiones hechas, cargas, RPE y duración.</li>
             <li>Bienestar diario: sueño, energía, agujetas, estrés, ánimo y dolor.</li>
             <li>Salud: lesiones, antecedentes e informes que compartas con tu entrenador.</li>
           </ul>
-        )}
-        {coach?.whatsapp && (
-          <div className="row">
-            <a className="btn sm" target="_blank" rel="noopener" href={askData('copia')}>Pedir una copia de mis datos</a>
-            <a className="btn sm" target="_blank" rel="noopener" href={askData('borrar')}>Pedir que se borren</a>
-          </div>
-        )}
-      </section>
-
-      <div className="row">
-        {canSwitch && <button className="btn" onClick={onSwitch}>Ir a mi panel de entrenador</button>}
-        <button className="btn" onClick={onLogout}>Cerrar sesión</button>
-      </div>
+          {coach?.whatsapp && <a className="btn sm" style={{ justifySelf: 'start' }} target="_blank" rel="noopener" href={askCopy}>Pedir una copia de mis datos</a>}
+        </Row>
+        <LegalRows extra={<Row icon="trash" label="Borrar mi cuenta" danger><DeleteAccount /></Row>} />
+      </Group>
+      <Group title="Sesión">
+        {canSwitch && <Row icon="swap" label="Ir a mi panel de entrenador" onClick={onSwitch} />}
+        <Row icon="logout" label="Cerrar sesión" danger onClick={onLogout} />
+      </Group>
+      <AppVersion email={session.user.email} />
     </div>
   );
 }

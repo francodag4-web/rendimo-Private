@@ -704,3 +704,20 @@ begin
   return jsonb_build_object('coach', is_c, 'player', is_p);
 end $$;
 grant execute on function public.claim_access(text) to authenticated;
+
+-- 14 · Borrar mi cuenta desde la app (App Store 5.1.1(v) y RGPD art. 17)
+create or replace function public.delete_my_account() returns void
+language plpgsql security definer set search_path = '' as $$
+declare
+  uid uuid := auth.uid();
+  mail text := lower(coalesce(auth.jwt() ->> 'email', ''));
+begin
+  if uid is null then raise exception 'Sin sesión'; end if;
+  delete from public.players where user_id = uid;          -- su ficha de cliente y todo su historial
+  delete from public.coach_allowlist where email = mail;
+  delete from public.coaches where id = uid;               -- si es entrenador: su marca, clientes y programas
+  delete from auth.users where id = uid;                   -- la cuenta de acceso
+end $$;
+revoke all on function public.delete_my_account() from public, anon;
+grant execute on function public.delete_my_account() to authenticated;
+

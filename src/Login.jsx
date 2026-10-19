@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase, PLATFORM } from './lib/supabase.js';
+import { AppVersion } from './ui/SettingsKit.jsx';
 
 // Código de invitación guardado al abrir el enlace #/unirse/<código>
 export const getInvite = () => { try { return localStorage.getItem('invite'); } catch { return null; } };
@@ -88,6 +89,8 @@ export default function Login() {
             </button>
           </>
         )}
+        <p className="small muted legal-links"><a href="#/legal/privacidad">Privacidad</a> · <a href="#/legal/condiciones">Condiciones</a> · <a href="#/legal/aviso">Aviso legal</a></p>
+        <AppVersion />
       </form>
     </div>
   );

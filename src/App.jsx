@@ -6,6 +6,7 @@ import PlayerApp from './player/PlayerApp.jsx';
 import Consent from './player/Consent.jsx';
 import { Loading } from './ui/ui.jsx';
 import PublicLead from './PublicLead.jsx';
+import Legal from './Legal.jsx';
 
 // Aplica el color de la marca del entrenador a toda la app
 export function applyBrand(color) {
@@ -17,6 +18,11 @@ export function applyBrand(color) {
 }
 
 export default function App() {
+  // Páginas legales públicas: #/legal/privacidad · condiciones · aviso
+  const [hash, setHash] = useState(window.location.hash);
+  useEffect(() => { const on = () => setHash(window.location.hash); window.addEventListener('hashchange', on); return () => window.removeEventListener('hashchange', on); }, []);
+  const legal = hash.match(/^#\/legal\/(privacidad|condiciones|aviso)/);
+  if (legal) return <Legal page={legal[1]} />;
   // Formulario público de solicitudes: #/s/<dirección del entrenador>
   const pub = window.location.hash.match(/^#\/s\/([a-z0-9-]+)/i);
   if (pub) return <PublicLead slug={pub[1].toLowerCase()} />;

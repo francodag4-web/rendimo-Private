@@ -1,8 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
+import { useCoach } from './CoachApp.jsx';
+import { ThemePicker, Group, Row, LegalRows, AppVersion } from '../ui/SettingsKit.jsx';
 
 // Barra inferior del entrenador en el móvil: 4 secciones + «Inicio» en el centro y «Más» con el resto
 const MAIN = [['agenda', 'Agenda'], ['clientes', 'Clientes'], ['inicio', 'Inicio'], ['programacion', 'Programa']];
-const MORE = [['solicitudes', 'Solicitudes'], ['pagos', 'Pagos'], ['planes', 'Planes'], ['biblioteca', 'Biblioteca'], ['ajustes', 'Marca y cuenta']];
+const MORE = [['solicitudes', 'Solicitudes'], ['pagos', 'Pagos'], ['planes', 'Planes'], ['biblioteca', 'Biblioteca'], ['ajustes', 'Ajustes']];
 
 function Icon({ k }) {
   const p = { width: 22, height: 22, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true };
@@ -20,46 +22,49 @@ function Icon({ k }) {
   }
 }
 
-export function MobileNav({ route, go, badge, canSwitch, onSwitch, onLogout }) {
-  const [more, setMore] = useState(false);
-  useEffect(() => { setMore(false); }, [route.page, route.id]);
-  useEffect(() => {
-    if (!more) return;
-    const esc = (e) => e.key === 'Escape' && setMore(false);
-    document.addEventListener('keydown', esc);
-    return () => document.removeEventListener('keydown', esc);
-  }, [more]);
-  const inMore = MORE.some(([k]) => k === route.page);
+export function MobileNav({ route, go, badge }) {
+  const inMore = route.page === 'mas' || MORE.some(([k]) => k === route.page);
   const moreBadge = MORE.reduce((a, [k]) => a + (badge[k] || 0), 0);
-  const items = [...MAIN.slice(0, 2), MAIN[2], MAIN[3]];
   return (
-    <>
-      {more && <div className="msheet-bg" onClick={() => setMore(false)} />}
-      {more && (
-        <div className="msheet" role="dialog" aria-label="Más secciones">
-          <div className="msheet-grid">
-            {MORE.map(([k, l]) => (
-              <button key={k} type="button" aria-current={route.page === k ? 'page' : undefined} onClick={() => go(k)}>
-                <span className="ic"><Icon k={k} />{badge[k] ? <span className="nb">{badge[k]}</span> : null}</span><span>{l}</span>
-              </button>
-            ))}
-          </div>
-          <div className="row" style={{ justifyContent: 'center' }}>
-            {canSwitch && <button className="btn sm" onClick={onSwitch}>Ver mi app de cliente</button>}
-            <button className="btn sm" onClick={onLogout}>Cerrar sesión</button>
-          </div>
-        </div>
-      )}
-      <nav className="cnav" aria-label="Secciones">
-        {items.map(([k, l]) => (
-          <button key={k} type="button" className={k === 'inicio' ? 'mid' : ''} aria-current={route.page === k && !more ? 'page' : undefined} onClick={() => go(k)}>
-            <span className="ic"><Icon k={k} />{badge[k] ? <span className="nb">{badge[k]}</span> : null}</span><span className="lbl">{l}</span>
-          </button>
-        ))}
-        <button type="button" aria-expanded={more} aria-current={inMore && !more ? 'page' : undefined} onClick={() => setMore(!more)}>
-          <span className="ic"><Icon k="mas" />{moreBadge > 0 && !more ? <span className="nb">{moreBadge}</span> : null}</span><span className="lbl">Más</span>
+    <nav className="cnav" aria-label="Secciones">
+      {MAIN.map(([k, l]) => (
+        <button key={k} type="button" className={k === 'inicio' ? 'mid' : ''} aria-current={route.page === k ? 'page' : undefined} onClick={() => go(k)}>
+          <span className="ic"><Icon k={k} />{badge[k] ? <span className="nb">{badge[k]}</span> : null}</span><span className="lbl">{l}</span>
         </button>
-      </nav>
-    </>
+      ))}
+      <button type="button" aria-current={inMore ? 'page' : undefined} onClick={() => go('mas')}>
+        <span className="ic"><Icon k="mas" />{moreBadge > 0 && route.page !== 'mas' ? <span className="nb">{moreBadge}</span> : null}</span><span className="lbl">Más</span>
+      </button>
+    </nav>
+  );
+}
+
+// Pantalla «Más»: el resto de secciones y los ajustes, agrupados como en los ajustes del móvil
+export function CoachMenu() {
+  const { go, leads = [], session, onLogout, canSwitch, onSwitch } = useCoach();
+  const newLeads = leads.filter((l) => l.status === 'activa' && !l.stage).length;
+  return (
+    <div className="setpage">
+      <div className="pagehead"><div><h1>Más</h1></div></div>
+      <ThemePicker />
+      <Group title="Gestión">
+        <Row icon="inbox" label="Solicitudes" badge={newLeads} onClick={() => go('solicitudes')} />
+        <Row icon="card" label="Pagos" onClick={() => go('pagos')} />
+        <Row icon="tag" label="Planes" onClick={() => go('planes')} />
+        <Row icon="book" label="Biblioteca" onClick={() => go('biblioteca')} />
+      </Group>
+      <Group title="Lo tuyo">
+        <Row icon="palette" label="Marca y mensajes" sub="Nombre, logo, color, formulario y WhatsApp" onClick={() => go('ajustes')} />
+        <Row icon="lock" label="Seguridad" sub="Contraseña" onClick={() => go('ajustes', 'seguridad')} />
+        {canSwitch && <Row icon="swap" label="Ver mi app de cliente" onClick={onSwitch} />}
+      </Group>
+      <Group title="Legal">
+        <LegalRows extra={<Row icon="trash" label="Borrar mi cuenta" danger onClick={() => go('ajustes', 'borrar')} />} />
+      </Group>
+      <Group title="Sesión">
+        <Row icon="logout" label="Cerrar sesión" danger onClick={onLogout} />
+      </Group>
+      <AppVersion email={session.user.email} />
+    </div>
   );
 }

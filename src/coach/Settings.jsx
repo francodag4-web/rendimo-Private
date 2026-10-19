@@ -1,16 +1,18 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useCoach } from './CoachApp.jsx';
 import { supabase, q } from '../lib/supabase.js';
 import { fileToDataURL } from '../lib/util.js';
 import { applyBrand } from '../App.jsx';
 import { useAction } from '../ui/ui.jsx';
 import { MESSAGES } from '../lib/messages.js';
+import { ThemePicker, Group, Row, PasswordForm, DeleteAccount, LegalRows, AppVersion } from '../ui/SettingsKit.jsx';
 
 export default function Settings() {
-  const { coach, load } = useCoach();
+  const { coach, load, route, session, onLogout, canSwitch, onSwitch } = useCoach();
+  // Desde «Más» se llega directo a una sección: #/ajustes/seguridad o #/ajustes/borrar
+  useEffect(() => { if (route.id) setTimeout(() => document.getElementById('set-' + route.id)?.scrollIntoView({ block: 'center' }), 50); }, [route.id]);
   const act = useAction();
   const [f, setF] = useState({ brand_name: coach.brand_name, brand_short: coach.brand_short || '', color: coach.color, logo: coach.logo, whatsapp: coach.whatsapp || '', instagram: coach.instagram || '', slug: coach.slug || '' });
-  const [pw, setPw] = useState('');
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   const onLogo = async (e) => {
     const file = e.target.files?.[0];
@@ -25,13 +27,10 @@ export default function Settings() {
       applyBrand(f.color);
     }, 'Marca guardada. Tus clientes ya la ven.');
   };
-  const savePw = (e) => {
-    e.preventDefault();
-    act(async () => { const { error } = await supabase.auth.updateUser({ password: pw }); if (error) throw error; setPw(''); }, 'Contraseña guardada.');
-  };
   return (
     <>
-      <div className="pagehead"><div><h1>Marca y cuenta</h1><p>Tus clientes ven tu nombre, tu logo y tu color en toda la app.</p></div></div>
+      <div className="pagehead"><div><h1>Ajustes</h1><p>Tu marca, cómo se ve la app, tu acceso y tus datos.</p></div></div>
+      <Group title="Apariencia"><div className="sbody"><ThemePicker /><p className="muted small">Se guarda en este dispositivo. Automático sigue el modo del móvil u ordenador.</p></div></Group>
       <div className="grid2">
         <form className="panel stack" onSubmit={save}>
           <h3>Tu marca</h3>
@@ -57,12 +56,6 @@ export default function Settings() {
               <span className="btn sm" style={{ background: f.color, color: '#fff', borderColor: f.color, marginLeft: 'auto' }}>Botón</span>
             </div>
           </div>
-          <form className="panel stack" onSubmit={savePw}>
-            <h3>Contraseña (opcional)</h3>
-            <p className="muted small">Puedes entrar siempre con el enlace por correo. Si prefieres contraseña, créala aquí.</p>
-            <input type="password" minLength={8} required autoComplete="new-password" placeholder="Mínimo 8 caracteres" value={pw} onChange={(e) => setPw(e.target.value)} />
-            <div className="row"><button className="btn" type="submit">Guardar contraseña</button></div>
-          </form>
         </div>
       </div>
       <details className="panel">
@@ -77,6 +70,17 @@ export default function Settings() {
           <p className="muted small">Entre llaves van los datos que se rellenan solos: {'{nombre}'}, {'{mes}'}, {'{importe}'}… Sin emojis a propósito: WhatsApp los pierde al abrir el mensaje desde un enlace.</p>
         </div>
       </details>
+      <Group title="Seguridad">
+        <Row key={"s" + route.id} id="set-seguridad" icon="lock" label="Contraseña" sub="Crear o cambiar" defaultOpen={route.id === 'seguridad'}><PasswordForm session={session} /></Row>
+      </Group>
+      <Group title="Legal y cuenta">
+        <LegalRows extra={<Row key={"b" + route.id} id="set-borrar" icon="trash" label="Borrar mi cuenta" danger defaultOpen={route.id === 'borrar'}><DeleteAccount coach /></Row>} />
+      </Group>
+      <Group title="Sesión">
+        {canSwitch && <Row icon="swap" label="Ver mi app de cliente" onClick={onSwitch} />}
+        <Row icon="logout" label="Cerrar sesión" danger onClick={onLogout} />
+      </Group>
+      <AppVersion email={session.user.email} />
     </>
   );
 }

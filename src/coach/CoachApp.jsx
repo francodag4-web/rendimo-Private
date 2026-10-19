@@ -14,7 +14,8 @@ import Payments from './Payments.jsx';
 import Plans from './Plans.jsx';
 import GlobalSearch from './GlobalSearch.jsx';
 import { commitment, setPlans } from '../lib/domain.js';
-import { MobileNav } from './MobileNav.jsx';
+import { MobileNav, CoachMenu } from './MobileNav.jsx';
+import { AppVersion } from '../ui/SettingsKit.jsx';
 
 const Ctx = createContext(null);
 export const useCoach = () => useContext(Ctx);
@@ -28,14 +29,16 @@ const PAGES = [
   ['solicitudes', 'Solicitudes'],
   ['pagos', 'Pagos'],
   ['planes', 'Planes'],
-  ['ajustes', 'Marca y cuenta'],
+  ['ajustes', 'Ajustes'],
 ];
+// Páginas sin hueco en el menú lateral (el «Más» del móvil)
+const HIDDEN = ['mas'];
 
 // Navegación con #hash para que funcione el botón atrás del móvil
 function useHashRoute() {
   const read = () => {
     const [page = 'inicio', id = null] = window.location.hash.replace(/^#\/?/, '').split('/');
-    return { page: PAGES.some(([k]) => k === page) ? page : 'inicio', id };
+    return { page: PAGES.some(([k]) => k === page) || HIDDEN.includes(page) ? page : 'inicio', id };
   };
   const [r, setR] = useState(read);
   useEffect(() => {
@@ -153,10 +156,10 @@ export default function CoachApp({ session, onLogout, canSwitch, onSwitch }) {
   if (!d?.coach) return <Loading />;
 
   setPlans(d.plans);
-  const ctx = { ...d, load, go, route, alerts, uid };
+  const ctx = { ...d, load, go, route, alerts, uid, session, onLogout, canSwitch, onSwitch };
   const newLeads = (d.leads || []).filter((l) => l.status === 'activa' && !l.stage).length;
   const coach = d.coach;
-  const Page = { inicio: Home, clientes: Clients, programacion: Programs, biblioteca: Library, agenda: Agenda, ajustes: Settings, solicitudes: Leads, pagos: Payments, planes: Plans }[route.page];
+  const Page = { inicio: Home, clientes: Clients, programacion: Programs, biblioteca: Library, agenda: Agenda, ajustes: Settings, solicitudes: Leads, pagos: Payments, planes: Plans, mas: CoachMenu }[route.page];
   const badge = { inicio: openAlerts, agenda: due, solicitudes: newLeads };
 
   const Brand = (
@@ -182,7 +185,7 @@ export default function CoachApp({ session, onLogout, canSwitch, onSwitch }) {
             {canSwitch && <button className="btn sm" onClick={onSwitch}>Ver mi app de cliente</button>}
             <span className="muted">{session.user.email}</span>
             <button className="btn sm" onClick={onLogout}>Cerrar sesión</button>
-            <span className="muted small">Con {PLATFORM}</span>
+            <AppVersion />
           </div>
         </aside>
         <header className="topbar">{Brand}<button className="btn sm" onClick={onLogout}>Salir</button></header>
@@ -190,7 +193,7 @@ export default function CoachApp({ session, onLogout, canSwitch, onSwitch }) {
           <div className="coachtop"><GlobalSearch /></div>
           <Page />
         </main>
-        <MobileNav route={route} go={go} badge={badge} canSwitch={canSwitch} onSwitch={onSwitch} onLogout={onLogout} />
+        <MobileNav route={route} go={go} badge={badge} />
       </div>
     </Ctx.Provider>
   );
