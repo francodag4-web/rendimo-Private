@@ -49,7 +49,9 @@ export default function PlayerApp({ player, session, onLogout, canSwitch, onSwit
   const today = iso();
   // Programa vigente: el más reciente que ya ha empezado; si no, el próximo
   const prog = d.programs.find((p) => p.start_date && p.start_date <= today) || d.programs[d.programs.length - 1] || null;
-  const ctx = { ...d, player, prog, load, today, club };
+  // Entrenamiento personal: sin club, partidos ni RPE del club
+  const team = player.kind !== 'personal';
+  const ctx = { ...d, player, prog, load, today, team, club: team ? club : { ...club, schedule: null, events: [] } };
   const doneToday = d.checkins.some((c) => c.date === today);
 
   return (
@@ -57,7 +59,7 @@ export default function PlayerApp({ player, session, onLogout, canSwitch, onSwit
       <header className="topbar" style={{ display: 'flex' }}>
         <div className="brand">
           {d.coach?.logo ? <img src={d.coach.logo} alt="" /> : <span className="logo">{(d.coach?.brand_short || d.coach?.brand_name || 'R').slice(0, 2)}</span>}
-          <div><b>{d.coach?.brand_name}</b><div className="small muted">Hola, {player.name.split(' ')[0]}</div></div>
+          <div><b>{d.coach?.brand_name}</b><div className="small muted">{greet()}, {player.name.split(' ')[0]}</div></div>
         </div>
         <button className="btn sm" aria-pressed={tab === 'cuenta'} onClick={() => setT(tab === 'cuenta' ? 'hoy' : 'cuenta')}>{tab === 'cuenta' ? 'Volver' : 'Mi cuenta'}</button>
       </header>
@@ -104,7 +106,7 @@ function Footer({ coach }) {
   );
 }
 
-// Mi cuenta del jugador
+// Mi cuenta del cliente
 function Account({ ctx, session, onLogout, canSwitch, onSwitch }) {
   const { player, coach, checkins, logs } = ctx;
   const act = useAction();
@@ -141,7 +143,7 @@ function Account({ ctx, session, onLogout, canSwitch, onSwitch }) {
         <dl className="kv">
           <dt>Nombre</dt><dd>{player.name}</dd>
           <dt>Correo</dt><dd>{player.email}</dd>
-          {player.position && <><dt>Posición</dt><dd>{player.position}</dd></>}
+          {player.position && <><dt>{player.kind === 'personal' ? 'Deporte' : 'Posición'}</dt><dd>{player.position}</dd></>}
           {player.plan && <><dt>Plan</dt><dd>{player.plan}</dd></>}
           {payState(ctx) && <><dt>Pago</dt><dd><span className={'pill ' + (payState(ctx).paid ? 'ok' : 'bad')}>{payState(ctx).text}</span></dd></>}
           <dt>Con {coachName} desde</dt><dd>{fmtDate(player.start_date)}</dd>
@@ -412,9 +414,9 @@ function Today({ ctx, goCheckin }) {
       <button className="btn" onClick={goCheckin}>Hacer check-in</button>
     </Hero>
   );
-  const top = <><ClubRPE ctx={ctx} />{nudge}<WeekNote ctx={ctx} /><ClubToday ctx={ctx} /></>;
+  const top = <>{ctx.team && <ClubRPE ctx={ctx} />}{nudge}<WeekNote ctx={ctx} />{ctx.team && <ClubToday ctx={ctx} />}</>;
   const msg = (t, sub) => <div className="stack">{top}<Hero color="t-s" title={t} sub={sub} /></div>;
-  if (!prog) return msg(`Hola, ${player.name.split(' ')[0]}`, 'Tu entrenador aún no te ha asignado un programa.');
+  if (!prog) return msg(`${greet()}, ${player.name.split(' ')[0]}`, 'Tu entrenador aún no te ha asignado un programa.');
   const w = calendarWeekIdx(prog);
   if (w == null) return msg(prog.name, 'Tu programa todavía no tiene fecha de inicio.');
   if (w < 0) return msg(prog.name, `Empieza el ${fmtDate(prog.start_date)}.`);
@@ -438,7 +440,7 @@ function Week({ ctx }) {
   const [off, setOff] = useState(0);
   const [openId, setOpenId] = useState(null);
   const [edit, setEdit] = useState(false);
-  const clubBox = (
+  const clubBox = ctx.team && (
     <section className="panel stack">
       <div className="between"><h3>Mi club</h3><button className="btn sm" aria-expanded={edit} onClick={() => setEdit(!edit)}>{edit ? 'Cerrar' : 'Días de club y partidos'}</button></div>
       {!edit && <p className="muted small">Marca qué días entrenas con tu club y cuándo juegas: tu entrenador lo ve al prepararte las sesiones.</p>}
@@ -560,6 +562,9 @@ function Plans({ ctx }) {
     </div>
   );
 }
+
+// Saludo según la hora
+function greet() { const h = new Date().getHours(); return h < 6 ? 'Buenas noches' : h < 14 ? 'Buenos días' : h < 21 ? 'Buenas tardes' : 'Buenas noches'; }
 
 // Estado de pago del mes (o del pago único)
 const MONTHS_ES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];

@@ -7,7 +7,7 @@ import { PLANS, defaultPlan, planPatch, money, commitment, monthKey, fromRow, is
 import Flag from './Flag.jsx';
 import PlanCard from '../ui/PlanCard.jsx';
 
-// Pasa a un jugador a un plan: pone importe, tipo de pago, compromiso y frecuencia de revisión
+// Pasa a un cliente a un plan: pone importe, tipo de pago, compromiso y frecuencia de revisión
 export function useAssignPlan() {
   const { load } = useCoach();
   const act = useAction();
@@ -31,7 +31,7 @@ export function AssignPlan({ p, label = 'Asignar' }) {
   );
 }
 
-// Precio especial de un jugador (distinto al del plan)
+// Precio especial de un cliente (distinto al del plan)
 function SpecialPrice({ p, plan }) {
   const { load } = useCoach();
   const act = useAction();
@@ -78,14 +78,14 @@ function PlanForm({ row, offer, onDone }) {
       if (data.fee == null || isNaN(data.fee)) throw new Error('Pon el precio.');
       if (row) {
         await q(supabase.from('plans').update(data).eq('id', row.id));
-        // Si cambia el nombre, los jugadores de ese plan lo siguen teniendo
+        // Si cambia el nombre, los clientes de ese plan lo siguen teniendo
         if (row.name !== data.name) await q(supabase.from('players').update({ plan: data.name }).eq('coach_id', uid).eq('plan', row.name));
       } else {
         await q(supabase.from('plans').insert({ ...data, sort: 10 }));
       }
       await load(['plans', 'players']);
       onDone();
-    }, row ? 'Plan guardado. Los jugadores que ya lo tienen mantienen su precio.' : f.is_offer ? 'Oferta creada. Ya sale en tu formulario y en la app de tus jugadores.' : 'Plan creado.');
+    }, row ? 'Plan guardado. Los clientes que ya lo tienen mantienen su precio.' : f.is_offer ? 'Oferta creada. Ya sale en tu formulario y en la app de tus clientes.' : 'Plan creado.');
   };
   const inPlan = row ? players.filter((p) => p.plan === row.name && !p.end_date).length : 0;
   return (
@@ -104,11 +104,11 @@ function PlanForm({ row, offer, onDone }) {
       </div>
       <label className="f">Frase corta<input maxLength={300} value={f.pitch} onChange={set('pitch')} placeholder="Para quién es, en una línea" /></label>
       <label className="f">Qué incluye (una cosa por línea)<textarea id="pf-feat" rows={4} value={f.features} onChange={set('features')} /></label>
-      <label className="row small"><input type="checkbox" style={{ width: 'auto' }} checked={f.active} onChange={set('active')} /> Visible en el formulario y en la app de los jugadores</label>
+      <label className="row small"><input type="checkbox" style={{ width: 'auto' }} checked={f.active} onChange={set('active')} /> Visible en el formulario y en la app de los clientes</label>
       <div className="row">
         <button className="btn pri" type="submit">{row ? 'Guardar' : f.is_offer ? 'Crear oferta' : 'Crear plan'}</button>
         <button className="btn" type="button" onClick={onDone}>Cancelar</button>
-        {row && inPlan > 0 && <span className="muted small">{inPlan} jugador{inPlan === 1 ? '' : 'es'} en este plan: si cambias el precio, mantienen el suyo (cámbialo con «€» si quieres).</span>}
+        {row && inPlan > 0 && <span className="muted small">{inPlan} cliente{inPlan === 1 ? '' : 's'} en este plan: si cambias el precio, mantienen el suyo (cámbialo con «€» si quieres).</span>}
       </div>
     </form>
   );
@@ -136,7 +136,7 @@ export default function Plans() {
   return (
     <>
       <div className="pagehead">
-        <div><h1>Planes</h1><p>Tus planes y ofertas, quién está en cada uno y lo que suman. Lo que ves aquí es lo que ven tus jugadores y tu formulario.</p></div>
+        <div><h1>Planes</h1><p>Tus planes y ofertas, quién está en cada uno y lo que suman. Lo que ves aquí es lo que ven tus clientes y tu formulario.</p></div>
         <div className="row">
           <span className="chip ok">{money(monthly)} al mes en cuotas activas</span>
           {!noDb && <button className="btn" onClick={() => setForm('plan')}>+ Nuevo plan</button>}
@@ -190,13 +190,13 @@ export default function Plans() {
         </section>
       )}
       <section className="panel stack">
-        <h3>Jugadores sin uno de estos planes</h3>
+        <h3>Clientes sin uno de estos planes</h3>
         {other.length ? (
           <ul className="list">{other.map((p) => (
             <li key={p.id}><span><b>{p.name}</b><Flag p={p} sm /> <span className="muted small">· {p.plan || 'sin plan'}</span></span><AssignPlan p={p} /></li>
           ))}</ul>
-        ) : <Empty>Todos tus jugadores activos están en uno de tus planes.</Empty>}
-        <p className="muted small">Precio especial: pulsa «€» junto al jugador para cobrarle un precio distinto al del plan. Para cambiarle de plan, usa la pestaña Datos de su ficha.</p>
+        ) : <Empty>Todos tus clientes activos están en uno de tus planes.</Empty>}
+        <p className="muted small">Precio especial: pulsa «€» junto al cliente para cobrarle un precio distinto al del plan. Para cambiarle de plan, usa la pestaña Datos de su ficha.</p>
       </section>
     </>
   );

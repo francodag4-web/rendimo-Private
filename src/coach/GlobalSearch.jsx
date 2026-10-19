@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useCoach } from './CoachApp.jsx';
 import { matches } from '../lib/util.js';
 
-// Buscador global: jugadores, programas, ejercicios y solicitudes. Ctrl+K (o ⌘K) para abrirlo.
+// Buscador global: clientes, programas, ejercicios y solicitudes. Ctrl+K (o ⌘K) para abrirlo.
 export default function GlobalSearch() {
   const { players, programs, exercises, leads = [], go } = useCoach();
   const [qy, setQy] = useState('');
@@ -21,9 +21,9 @@ export default function GlobalSearch() {
     const pname = (id) => players.find((p) => p.id === id)?.name || '';
     const out = [];
     players.filter((p) => matches(`${p.name} ${p.position || ''} ${p.plan || ''} ${p.email}`, qy)).slice(0, 6)
-      .forEach((p) => out.push({ grp: 'Jugadores', key: 'p' + p.id, label: p.name, sub: [p.position, p.plan, p.end_date ? 'de baja' : ''].filter(Boolean).join(' · '), go: () => go('clientes', p.id) }));
+      .forEach((p) => out.push({ grp: 'Clientes', key: 'p' + p.id, label: p.name, sub: [p.position, p.plan, p.end_date ? 'de baja' : ''].filter(Boolean).join(' · '), go: () => go('clientes', p.id) }));
     programs.filter((p) => matches(`${p.name} ${pname(p.player_id)}`, qy)).slice(0, 6)
-      .forEach((p) => out.push({ grp: p.player_id ? 'Programas de jugadores' : 'Plantillas', key: 'g' + p.id, label: p.player_id ? `${pname(p.player_id)} · ${p.name}` : p.name, sub: '', go: () => go('programacion', p.id) }));
+      .forEach((p) => out.push({ grp: p.player_id ? 'Programas de clientes' : 'Plantillas', key: 'g' + p.id, label: p.player_id ? `${pname(p.player_id)} · ${p.name}` : p.name, sub: '', go: () => go('programacion', p.id) }));
     leads.filter((l) => matches(`${l.name} ${l.phone || ''} ${l.email || ''}`, qy)).slice(0, 4)
       .forEach((l) => out.push({ grp: 'Solicitudes', key: 'l' + l.id, label: l.name, sub: l.status, go: () => go('solicitudes', l.id) }));
     exercises.filter((e) => matches(`${e.name} ${e.primary_muscle || ''} ${e.type || ''}`, qy)).slice(0, 8)
@@ -41,8 +41,8 @@ export default function GlobalSearch() {
   let last = '';
   return (
     <div className="gsearch">
-      <input ref={ref} id="gsearch" type="search" role="combobox" aria-expanded={open && results.length > 0} aria-controls="gs-list" aria-label="Buscar jugador, programa o ejercicio"
-        placeholder="Buscar jugador, ejercicio, plantilla… (Ctrl+K)" value={qy}
+      <input ref={ref} id="gsearch" type="search" role="combobox" aria-expanded={open && results.length > 0} aria-controls="gs-list" aria-label="Buscar cliente, programa o ejercicio"
+        placeholder="Buscar cliente, ejercicio, plantilla… (Ctrl+K)" value={qy}
         onChange={(e) => { setQy(e.target.value); setOpen(true); setHi(0); }} onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 150)} onKeyDown={onKey} />
       {open && qy.trim().length >= 2 && (
         <ul className="gslist" id="gs-list" role="listbox">

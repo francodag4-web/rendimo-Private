@@ -646,3 +646,9 @@ on conflict (coach_id, name) do nothing;
 -- Rendimo · 11: permitir el pago trimestral en los planes
 alter table public.plans drop constraint if exists plans_fee_type_check;
 alter table public.plans add constraint plans_fee_type_check check (fee_type in ('mensual','trimestral','unico'));
+
+-- 12 · Tipo de cliente: juega en un equipo (club y partidos) o entrenamiento personal
+alter table public.players add column if not exists kind text not null default 'equipo';
+alter table public.players drop constraint if exists players_kind_check;
+alter table public.players add constraint players_kind_check check (kind in ('equipo','personal'));
+grant insert (kind), update (kind) on public.players to authenticated;

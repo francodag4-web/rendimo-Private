@@ -24,9 +24,19 @@ export async function q(promise) {
   return data;
 }
 
+// Igual que q, pero si la base aún no tiene alguna columna nueva, guarda el resto sin ella
+export async function qOpt(build, payload, optional = ['kind']) {
+  const { data, error } = await build(payload);
+  if (!error) return data;
+  const miss = optional.filter((k) => k in payload && new RegExp(`\\b${k}\\b`).test(error.message));
+  if (!miss.length) throw new Error(traducir(error.message));
+  const rest = { ...payload }; miss.forEach((k) => delete rest[k]);
+  return q(build(rest));
+}
+
 function traducir(m = '') {
   if (/duplicate key.*slug/i.test(m)) return 'Esa dirección ya la usa otro entrenador. Prueba otra.';
-  if (/duplicate key.*email/i.test(m)) return 'Ya existe un jugador con ese correo.';
+  if (/duplicate key.*email/i.test(m)) return 'Ya existe un cliente con ese correo.';
   if (/duplicate key.*name/i.test(m)) return 'Ya existe un ejercicio con ese nombre.';
   if (/duplicate key/i.test(m)) return 'Ese registro ya existe.';
   if (/row-level security/i.test(m)) return 'No tienes permiso para hacer eso.';

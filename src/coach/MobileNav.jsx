@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 
 // Barra inferior del entrenador en el móvil: 4 secciones + «Inicio» en el centro y «Más» con el resto
-const MAIN = [['agenda', 'Agenda'], ['clientes', 'Jugadores'], ['inicio', 'Inicio'], ['programacion', 'Programa']];
+const MAIN = [['agenda', 'Agenda'], ['clientes', 'Clientes'], ['inicio', 'Inicio'], ['programacion', 'Programa']];
 const MORE = [['solicitudes', 'Solicitudes'], ['pagos', 'Pagos'], ['planes', 'Planes'], ['biblioteca', 'Biblioteca'], ['ajustes', 'Marca y cuenta']];
 
 function Icon({ k }) {
@@ -45,7 +45,7 @@ export function MobileNav({ route, go, badge, canSwitch, onSwitch, onLogout }) {
             ))}
           </div>
           <div className="row" style={{ justifyContent: 'center' }}>
-            {canSwitch && <button className="btn sm" onClick={onSwitch}>Ver mi parte de jugador</button>}
+            {canSwitch && <button className="btn sm" onClick={onSwitch}>Ver mi app de cliente</button>}
             <button className="btn sm" onClick={onLogout}>Cerrar sesión</button>
           </div>
         </div>

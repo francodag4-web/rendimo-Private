@@ -62,7 +62,7 @@ export default function Agenda() {
   return (
     <>
       <div className="pagehead">
-        <div><h1>Agenda</h1><p>Tus tareas y los avisos de las notas de cada jugador.</p></div>
+        <div><h1>Agenda</h1><p>Tus tareas y los avisos de las notas de cada cliente.</p></div>
         <button className="btn pri" onClick={() => setForm({ title: '', date: sel, time: '09:00', player: '' })}>+ Nueva tarea</button>
       </div>
       {form && (
@@ -70,7 +70,7 @@ export default function Agenda() {
           <input id="t-title" required placeholder="Ej. Grabar vídeo de cargada" style={{ flex: '1 1 220px' }} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
           <input id="t-date" type="date" required style={{ width: 'auto' }} value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
           <input id="t-time" type="time" style={{ width: 'auto' }} value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value })} />
-          <select style={{ width: 'auto' }} value={form.player} onChange={(e) => setForm({ ...form, player: e.target.value })}><option value="">Sin jugador</option>{players.filter((p) => !p.end_date).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
+          <select style={{ width: 'auto' }} value={form.player} onChange={(e) => setForm({ ...form, player: e.target.value })}><option value="">Sin cliente</option>{players.filter((p) => !p.end_date).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
           <button className="btn pri" type="submit">Guardar</button><button type="button" className="btn" onClick={() => setForm(null)}>Cancelar</button>
         </form>
       )}

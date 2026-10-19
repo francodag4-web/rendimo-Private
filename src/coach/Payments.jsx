@@ -58,7 +58,7 @@ export default function Payments() {
       {list.length ? (
         <div className="panel tablewrap">
           <table>
-            <thead><tr><th>Jugador</th><th>Plan</th><th>Importe</th><th>Compromiso</th><th style={{ textTransform: 'capitalize' }}>{monthName(mk)}</th><th></th></tr></thead>
+            <thead><tr><th>Cliente</th><th>Plan</th><th>Importe</th><th>Compromiso</th><th style={{ textTransform: 'capitalize' }}>{monthName(mk)}</th><th></th></tr></thead>
             <tbody>{list.map((p) => {
               const r = paidRow(p);
               return (

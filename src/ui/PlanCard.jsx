@@ -3,7 +3,7 @@ import { fmtDate } from '../lib/util.js';
 
 const tu = (x) => x.replace(/\bsu posición\b/g, 'tu posición').replace(/\bsu fisio\b/g, 'tu fisio').replace(/\bsu calendario\b/g, 'tu calendario');
 
-// Tarjeta de un plan u oferta: la ven el jugador, el formulario público y el entrenador
+// Tarjeta de un plan u oferta: la ven el cliente, el formulario público y el entrenador
 export default function PlanCard({ plan: p, badge, as: Tag = 'section', className = '', children, you = true, ...rest }) {
   return (
     <Tag className={`tile ${p.color || 't-g'} plancard ${p.offer ? 'offer ' : ''}${className}`} aria-label={p.name} {...rest}>

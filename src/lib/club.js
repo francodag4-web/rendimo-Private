@@ -1,4 +1,4 @@
-// Calendario del club: días fijos de entreno y partidos (editable por entrenador y jugador)
+// Calendario del club: días fijos de entreno y partidos (editable por entrenador y cliente)
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from './supabase.js';
 import { iso, addDays, parseISO, daysBetween, dow } from './util.js';

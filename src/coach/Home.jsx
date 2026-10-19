@@ -84,7 +84,7 @@ export default function Home() {
     <>
       <div className="pagehead">
         <div><h1>Hola, {coach.brand_short || coach.brand_name}</h1><p>{new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}</p></div>
-        <button className="btn pri" onClick={() => go('clientes', 'nuevo')}>+ Nuevo jugador</button>
+        <button className="btn pri" onClick={() => go('clientes', 'nuevo')}>+ Nuevo cliente</button>
       </div>
 
       <div className="board">
@@ -92,8 +92,8 @@ export default function Home() {
           <h3>Clientes activos</h3>
           <div className="big num">{active.length}</div>
           {active.length > 0 && <div className="bars" aria-hidden="true">{planRows.map(([k, n], i) => <i key={k} style={{ width: `${(n / active.length) * 100}%`, background: shades[Math.min(i, 3)] }} />)}</div>}
-          <div className="sub">{planRows.length ? planRows.map(([k, n]) => `${n} ${k}`).join(' · ') : 'Añade tu primer jugador.'}</div>
-          <div className="row" style={{ gap: 14 }}><Lnk onClick={() => go('clientes')}>Ver jugadores</Lnk><Lnk onClick={() => go('planes')}>Ver planes</Lnk></div>
+          <div className="sub">{planRows.length ? planRows.map(([k, n]) => `${n} ${k}`).join(' · ') : 'Añade tu primer cliente.'}</div>
+          <div className="row" style={{ gap: 14 }}><Lnk onClick={() => go('clientes')}>Ver clientes</Lnk><Lnk onClick={() => go('planes')}>Ver planes</Lnk></div>
         </section>
 
         <section className="tile t-r" aria-label="Revisiones pendientes">
@@ -105,7 +105,7 @@ export default function Home() {
                 <span className="row"><span className="pill">{r.text}</span>{p.phone && <a className="wa" target="_blank" rel="noopener" href={waURL(p.phone, waText(p, 'revision', coach))} aria-label={`WhatsApp a ${p.name}`}><WAIcon /></a>}</span>
               </li>
             ))}</ul>
-          ) : <div className="sub">Ninguna en los próximos 2 días. Se programan desde la ficha de cada jugador.</div>}
+          ) : <div className="sub">Ninguna en los próximos 2 días. Se programan desde la ficha de cada cliente.</div>}
         </section>
 
         <section className="tile t-p" aria-label="Solicitudes">
@@ -123,7 +123,7 @@ export default function Home() {
             <ul>{records.map((t) => { const p = pname(t.player_id); return (
               <li key={t.id}><span><b>{p?.name.split(' ')[0]}</b> · {t.test}</span><span className="row"><b className="num">{fmtNum(testValue(t))} {t.unit}</b>{p?.phone && <a className="wa" target="_blank" rel="noopener" aria-label={`Felicitar a ${p.name}`} href={waURL(p.phone, waText(p, 'marca', coach, `${t.test} ${fmtNum(testValue(t))} ${t.unit || ''}`.trim()))}><WAIcon /></a>}</span></li>
             ); })}</ul>
-          ) : <div className="sub">Aparecen cuando un jugador supera su mejor registro en un test (últimos 14 días).</div>}
+          ) : <div className="sub">Aparecen cuando un cliente supera su mejor registro en un test (últimos 14 días).</div>}
         </section>
 
         <section className="tile t-t" aria-label="Hoy">
@@ -135,7 +135,7 @@ export default function Home() {
         <section className="tile t-b" aria-label="Pagos del mes">
           <h3>Pagos · {monthName(mk)}</h3>
           <div className="big num">{paid.length}<small>/{payable.length}</small></div>
-          <div className="sub">{payable.length ? (unpaid.length ? <>{unpaid.length} pendiente{unpaid.length === 1 ? '' : 's'} · {unpaid.slice(0, 3).map((p, i) => <React.Fragment key={p.id}>{i ? ', ' : ''}<Lnk onClick={() => go('pagos')}>{p.name.split(' ')[0]}</Lnk></React.Fragment>)}</> : 'Todo cobrado este mes.') : 'Pon el importe en la ficha de cada jugador para controlar pagos.'}</div>
+          <div className="sub">{payable.length ? (unpaid.length ? <>{unpaid.length} pendiente{unpaid.length === 1 ? '' : 's'} · {unpaid.slice(0, 3).map((p, i) => <React.Fragment key={p.id}>{i ? ', ' : ''}<Lnk onClick={() => go('pagos')}>{p.name.split(' ')[0]}</Lnk></React.Fragment>)}</> : 'Todo cobrado este mes.') : 'Pon el importe en la ficha de cada cliente para controlar pagos.'}</div>
           <div><Lnk onClick={() => go('pagos')}>Ver pagos</Lnk></div>
         </section>
 

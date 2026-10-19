@@ -4,7 +4,7 @@ import { iso, fmtDate, DAYS } from '../lib/util.js';
 import { useAction, useToast } from './ui.jsx';
 import { matchText } from '../lib/club.js';
 
-// Editor del calendario del club. Lo usan el entrenador (en Programación) y el jugador (en Semana).
+// Editor del calendario del club. Lo usan el entrenador (en Programación) y el cliente (en Semana).
 export default function ClubEditor({ playerId, club, who = 'coach' }) {
   const act = useAction();
   const toast = useToast();

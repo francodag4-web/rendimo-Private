@@ -22,7 +22,7 @@ export const useCoach = () => useContext(Ctx);
 const PAGES = [
   ['inicio', 'Inicio'],
   ['agenda', 'Agenda'],
-  ['clientes', 'Jugadores'],
+  ['clientes', 'Clientes'],
   ['programacion', 'Programación'],
   ['biblioteca', 'Biblioteca'],
   ['solicitudes', 'Solicitudes'],
@@ -179,7 +179,7 @@ export default function CoachApp({ session, onLogout, canSwitch, onSwitch }) {
             ))}
           </nav>
           <div className="foot">
-            {canSwitch && <button className="btn sm" onClick={onSwitch}>Ver mi parte de jugador</button>}
+            {canSwitch && <button className="btn sm" onClick={onSwitch}>Ver mi app de cliente</button>}
             <span className="muted">{session.user.email}</span>
             <button className="btn sm" onClick={onLogout}>Cerrar sesión</button>
             <span className="muted small">Con {PLATFORM}</span>

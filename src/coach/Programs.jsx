@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useCoach } from './CoachApp.jsx';
 import { supabase, q } from '../lib/supabase.js';
-import { matches, iso, fmtDate, DAYS, addDays, mondayOf } from '../lib/util.js';
+import { matches, iso, fmtDate, DAYS, addDays, mondayOf, parseISO } from '../lib/util.js';
 import { useAction, useToast, Empty, Tabs, Loading } from '../ui/ui.jsx';
 import ExercisePicker from './ExercisePicker.jsx';
 import {
@@ -22,23 +22,60 @@ export default function Programs() {
   return route.id ? <Editor key={route.id} id={route.id} /> : <ProgramList />;
 }
 
+// Asigna una o varias plantillas a uno o varios clientes. Varias plantillas se encadenan: cada una empieza al acabar la anterior.
+export async function assignTemplates({ uid, templates, clients, start }) {
+  const rows = [];
+  for (const c of clients) {
+    let d = parseISO(start);
+    for (const t of templates) {
+      rows.push({ coach_id: uid, player_id: c.id, template_id: t.id, name: t.name, start_date: iso(d), data: cloneWithNewIds(t.data) });
+      d = addDays(d, Math.max(1, totalWeeks(t.data)) * 7);
+    }
+  }
+  return q(supabase.from('programs').insert(rows).select());
+}
+
+// Barra de selección múltiple
+export function SelBar({ n, noun, fem = false, onClear, children }) {
+  return (
+    <div className="selbar" role="region" aria-label="Selección">
+      <b>{n} {noun}{n === 1 ? '' : 's'} seleccionad{fem ? 'a' : 'o'}{n === 1 ? '' : 's'}</b>
+      <div className="row">{children}<button className="btn sm ghost" onClick={onClear}>Quitar selección</button></div>
+    </div>
+  );
+}
+
 function ProgramList() {
   const { programs, players, uid, load, go } = useCoach();
   const act = useAction();
+  const toast = useToast();
   const [show, setShow] = useState('tpl');
   const [qy, setQy] = useState('');
   const [tool, setTool] = useState(null); // 'csv' | 'proto'
+  const [sel, setSel] = useState([]); // ids en el orden en que se marcan
+  const [mode, setMode] = useState(null); // 'asignar' | 'borrar'
   const pname = (id) => players.find((p) => p.id === id)?.name || '';
   const list = programs.filter((p) => (show === 'tpl' ? !p.player_id : !!p.player_id) && matches(`${p.name} ${pname(p.player_id)}`, qy));
+  const chosen = sel.map((id) => programs.find((p) => p.id === id)).filter(Boolean);
+  const clear = () => { setSel([]); setMode(null); };
+  const toggle = (id) => setSel((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+  const allOn = list.length > 0 && list.every((p) => sel.includes(p.id));
   const create = () => act(async () => {
     const row = await q(supabase.from('programs').insert({ coach_id: uid, name: 'Nueva plantilla', data: emptyProgram() }).select().single());
     await load('programs');
     go('programacion', row.id);
   });
+  const del = () => act(async () => {
+    const rows = chosen;
+    await q(supabase.from('programs').delete().in('id', rows.map((r) => r.id)));
+    await load('programs');
+    clear();
+    toast(`${rows.length} programa${rows.length === 1 ? '' : 's'} eliminado${rows.length === 1 ? '' : 's'}.`, { undo: () => act(async () => { await q(supabase.from('programs').insert(rows)); await load('programs'); }) });
+  });
   return (
     <>
       <div className="pagehead">
-        <div><h1>Programación</h1><p>Crea plantillas y asígnalas. Cada jugador recibe una copia: si cambias la plantilla, lo asignado no cambia.</p></div>
+        <div><h1>Programación</h1><p>Crea plantillas y asígnalas. Cada cliente recibe una copia: si cambias la plantilla, lo asignado no cambia.</p></div>
         <div className="row">
           <button className="btn" aria-expanded={tool === 'proto'} onClick={() => setTool(tool === 'proto' ? null : 'proto')}>Protocolos de readaptación</button>
           <button className="btn" aria-expanded={tool === 'csv'} onClick={() => setTool(tool === 'csv' ? null : 'csv')}>Importar CSV</button>
@@ -48,21 +85,69 @@ function ProgramList() {
       {tool === 'csv' && <TemplateImporter onClose={() => setTool(null)} />}
       {tool === 'proto' && <ProtocolGallery onClose={() => setTool(null)} />}
       <div className="row">
-        <Tabs tabs={[['tpl', 'Plantillas'], ['asig', 'Asignados a jugadores']]} value={show} onChange={setShow} />
+        <Tabs tabs={[['tpl', 'Plantillas'], ['asig', 'Asignados a clientes']]} value={show} onChange={(v) => { setShow(v); clear(); }} />
         <input style={{ maxWidth: 280 }} placeholder="Buscar" value={qy} onChange={(e) => setQy(e.target.value)} />
       </div>
+      {sel.length > 0 && (
+        <SelBar n={sel.length} noun={show === 'tpl' ? 'plantilla' : 'programa'} fem={show === 'tpl'} onClear={clear}>
+          {show === 'tpl' && <button className={'btn sm' + (mode === 'asignar' ? ' pri' : '')} aria-expanded={mode === 'asignar'} onClick={() => setMode(mode === 'asignar' ? null : 'asignar')}>Asignar a clientes</button>}
+          {mode === 'borrar'
+            ? <span className="row"><span className="small">¿Eliminar {sel.length}?</span><button className="btn sm danger" onClick={del}>Sí, eliminar</button><button className="btn sm" onClick={() => setMode(null)}>No</button></span>
+            : <button className="btn sm danger" onClick={() => setMode('borrar')}>Eliminar</button>}
+        </SelBar>
+      )}
+      {mode === 'asignar' && show === 'tpl' && <MultiAssign templates={chosen} onDone={clear} />}
       {list.length ? (
-        <ul className="list">
+        <ul className="list sel">
+          <li className="selall"><label className="row small"><input type="checkbox" checked={allOn} onChange={() => setSel(allOn ? [] : list.map((p) => p.id))} /> Seleccionar todo</label></li>
           {list.map((p) => (
-            <li key={p.id} style={{ cursor: 'pointer' }} onClick={() => go('programacion', p.id)}>
-              <span><b>{p.player_id ? `${pname(p.player_id)} · ` : ''}{p.name}</b> <span className="muted small">· {totalWeeks(p.data)} semanas{p.start_date ? ` · desde ${fmtDate(p.start_date)}` : ''}</span></span>
+            <li key={p.id} className={sel.includes(p.id) ? 'on' : ''} style={{ cursor: 'pointer' }} onClick={() => go('programacion', p.id)}>
+              <span className="row" style={{ flexWrap: 'nowrap' }}>
+                <input type="checkbox" aria-label={`Seleccionar ${p.player_id ? pname(p.player_id) + ' · ' : ''}${p.name}`} checked={sel.includes(p.id)} onClick={(e) => e.stopPropagation()} onChange={() => toggle(p.id)} />
+                <span><b>{p.player_id ? `${pname(p.player_id)} · ` : ''}{p.name}</b> <span className="muted small">· {totalWeeks(p.data)} semanas{p.start_date ? ` · desde ${fmtDate(p.start_date)}` : ''}</span></span>
+              </span>
               <span className="muted small">editado {fmtDate(p.updated_at)}</span>
             </li>
           ))}
         </ul>
-      ) : <Empty>{show === 'tpl' ? 'Aún no tienes plantillas. Crea la primera con «+ Nueva plantilla».' : 'Aún no has asignado programas. Abre una plantilla y pulsa «Asignar a jugador».'}</Empty>}
+      ) : <Empty>{show === 'tpl' ? 'Aún no tienes plantillas. Crea la primera con «+ Nueva plantilla».' : 'Aún no has asignado programas. Marca plantillas y pulsa «Asignar a clientes».'}</Empty>}
       <SavedBlocks />
     </>
+  );
+}
+
+// Elegir clientes y fecha de inicio para las plantillas marcadas
+function MultiAssign({ templates, onDone }) {
+  const { players, uid, load } = useCoach();
+  const act = useAction();
+  const active = players.filter((p) => !p.end_date);
+  const [who, setWho] = useState([]);
+  const [qy, setQy] = useState('');
+  const [start, setStart] = useState(iso(mondayOf(addDays(new Date(), 7))));
+  const shown = active.filter((p) => matches(`${p.name} ${p.plan || ''}`, qy));
+  const toggle = (id) => setWho((w) => (w.includes(id) ? w.filter((x) => x !== id) : [...w, id]));
+  const go = () => act(async () => {
+    await assignTemplates({ uid, templates, clients: active.filter((p) => who.includes(p.id)), start });
+    await load('programs');
+    onDone();
+  }, `Asignado a ${who.length} cliente${who.length === 1 ? '' : 's'}. Lo ves en «Asignados a clientes».`);
+  if (!active.length) return <Empty>Aún no tienes clientes activos.</Empty>;
+  return (
+    <section className="panel stack" aria-label="Asignar a clientes">
+      <div className="between">
+        <b>Asignar {templates.length === 1 ? `«${templates[0].name}»` : `${templates.length} plantillas`} a…</b>
+        <input style={{ maxWidth: 220 }} placeholder="Buscar cliente" value={qy} onChange={(e) => setQy(e.target.value)} />
+      </div>
+      <div className="pickgrid">
+        {shown.map((p) => <label key={p.id} className={'pick' + (who.includes(p.id) ? ' on' : '')}><input type="checkbox" checked={who.includes(p.id)} onChange={() => toggle(p.id)} /> {p.name}</label>)}
+      </div>
+      {templates.length > 1 && <p className="muted small">Se encadenan en el orden en que las marcaste: {templates.map((t, i) => `${i + 1}. ${t.name}`).join(' → ')}. Cada una empieza al acabar la anterior.</p>}
+      <div className="row">
+        <label className="row small">Empieza el<input id="masg-start" type="date" style={{ width: 'auto' }} value={start} onChange={(e) => setStart(e.target.value)} /></label>
+        <button className="btn pri" disabled={!who.length} onClick={go}>Asignar a {who.length} cliente{who.length === 1 ? '' : 's'}</button>
+        <button className="btn sm ghost" onClick={() => setWho(who.length === shown.length ? [] : shown.map((p) => p.id))}>{who.length === shown.length ? 'Ninguno' : 'Todos'}</button>
+      </div>
+    </section>
   );
 }
 
@@ -213,7 +298,7 @@ function Editor({ id }) {
 
       {!player && <Assign prog={prog} />}
       {player && <PlayerContext player={player} />}
-      {player && <ClubPanel player={player} club={club} />}
+      {player && player.kind !== 'personal' && <ClubPanel player={player} club={club} />}
 
       {/* Fases */}
       <div className="row">
@@ -255,7 +340,7 @@ function Editor({ id }) {
         </div>
       )}
 
-      {week && player && prog.start_date && <WeekStrip prog={prog} n={weekNumber} week={week} club={club} />}
+      {week && player && player.kind !== 'personal' && prog.start_date && <WeekStrip prog={prog} n={weekNumber} week={week} club={club} />}
       {week && (
         <>
           {[...week.sessions].map((s, si) => ({ s, si })).sort((a, b) => a.s.day - b.s.day).map(({ s, si }) => (
@@ -345,10 +430,10 @@ function Assign({ prog }) {
     const row = await q(supabase.from('programs').insert({ coach_id: uid, player_id: pid, template_id: prog.id, name: prog.name, start_date: start, data: cloneWithNewIds(prog.data) }).select().single());
     await load('programs');
     go('programacion', row.id);
-  }, 'Asignado. Ahora editas la copia del jugador.');
+  }, 'Asignado. Ahora editas la copia del cliente.');
   return (
     <div className="panel row">
-      <b>Asignar a jugador</b>
+      <b>Asignar a cliente</b>
       <select id="asg-player" style={{ width: 'auto' }} value={pid} onChange={(e) => setPid(e.target.value)}>{active.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
       <label className="row small">Empieza el<input id="asg-start" type="date" style={{ width: 'auto' }} value={start} onChange={(e) => setStart(e.target.value)} /></label>
       <button className="btn pri" onClick={assign}>Asignar copia</button>
@@ -379,7 +464,7 @@ function Danger({ prog }) {
   );
 }
 
-// Lo importante del jugador y su evolución reciente, delante al programar
+// Lo importante del cliente y su evolución reciente, delante al programar
 function PlayerContext({ player }) {
   const { notes, evolution = [], go } = useCoach();
   const items = importantOf(player, notes);
@@ -462,11 +547,11 @@ function DayTag({ date, club }) {
   );
 }
 
-// La semana del jugador con sus entrenos de club y partidos, para cuadrar las sesiones
+// La semana del cliente con sus entrenos de club y partidos, para cuadrar las sesiones
 function WeekStrip({ prog, n, week, club }) {
   const days = Array.from({ length: 7 }, (_, i) => ({ day: i + 1, date: sessionDate(prog, n, i + 1) }));
   return (
-    <div className="panel weekstrip" aria-label="Semana del jugador">
+    <div className="panel weekstrip" aria-label="Semana del cliente">
       {days.map(({ day, date }) => {
         const c = clubDay(date, club);
         const ss = week.sessions.filter((x) => x.day === day);
@@ -489,7 +574,7 @@ function ClubPanel({ player, club }) {
   const nm = nextMatch(club);
   return (
     <details className="panel">
-      <summary style={{ cursor: 'pointer' }}><b>Club de {player.name.split(' ')[0]}</b> <span className="muted small">· {days ? `entrena ${days}` : 'sin días de club'}{nm ? ` · próximo partido ${short(nm.date)}${nm.label ? ' vs ' + nm.label : ''}` : ''} · lo puede editar también el jugador</span></summary>
+      <summary style={{ cursor: 'pointer' }}><b>Club de {player.name.split(' ')[0]}</b> <span className="muted small">· {days ? `entrena ${days}` : 'sin días de club'}{nm ? ` · próximo partido ${short(nm.date)}${nm.label ? ' vs ' + nm.label : ''}` : ''} · lo puede editar también el cliente</span></summary>
       <div style={{ marginTop: 12 }}>{club.ready ? <ClubEditor playerId={player.id} club={club} /> : <span className="muted">Cargando…</span>}</div>
     </details>
   );

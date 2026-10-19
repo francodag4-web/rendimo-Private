@@ -8,7 +8,7 @@ const weeks = () => { const m = mondayOf(new Date()); return [['esta', 'Esta sem
 const range = (w) => { const a = parseISO(w); const b = addDays(a, 6); return `${a.getDate()} ${MONTHS[a.getMonth()].slice(0, 3)} – ${b.getDate()} ${MONTHS[b.getMonth()].slice(0, 3)}`; };
 const EXAMPLES = ['Esta semana nos centramos más en pliometría: calienta bien y llega descansado.', 'Semana de descarga: baja un poco las cargas y cuida el sueño.', 'Semana de partido importante: llega fresco el domingo.'];
 
-// Nota de la semana para un jugador (o para todos los activos con `all`)
+// Nota de la semana para un cliente (o para todos los activos con `all`)
 export default function WeekNoteEditor({ p, all }) {
   const { weekNotes = [], players, uid, load } = useCoach();
   const act = useAction();
@@ -25,7 +25,7 @@ export default function WeekNoteEditor({ p, all }) {
       await q(supabase.from('week_notes').upsert(rows, { onConflict: 'player_id,week' }));
       await load('weekNotes');
       if (all) setText('');
-    }, all ? `Nota enviada a ${targets.length} jugador${targets.length === 1 ? '' : 'es'}. La ven en «Hoy».` : 'Nota guardada. La verá en «Hoy» esa semana.');
+    }, all ? `Nota enviada a ${targets.length} cliente${targets.length === 1 ? '' : 's'}. La ven en «Hoy».` : 'Nota guardada. La verá en «Hoy» esa semana.');
   };
   const del = () => act(async () => {
     const old = cur;
@@ -37,7 +37,7 @@ export default function WeekNoteEditor({ p, all }) {
     <form className="panel stack wnbox" onSubmit={save}>
       <div className="between">
         <div><h3>{all ? 'Nota de la semana para todos' : `Nota de la semana para ${p.name.split(' ')[0]}`}</h3>
-          <p className="muted small">{all ? `La verán tus ${targets.length} jugadores activos al abrir «Hoy». Sustituye la que tengan esa semana.` : 'La ve al abrir «Hoy» en su app, durante esa semana.'}</p></div>
+          <p className="muted small">{all ? `La verán tus ${targets.length} clientes activos al abrir «Hoy». Sustituye la que tengan esa semana.` : 'La ve al abrir «Hoy» en su app, durante esa semana.'}</p></div>
         <span className="row">{weeks().map(([k, l, w]) => <button key={k} type="button" className={'btn sm' + (wk === w ? ' pri' : '')} aria-pressed={wk === w} onClick={() => setWk(w)}>{l} · {range(w)}</button>)}</span>
       </div>
       <textarea aria-label="Nota de la semana" required maxLength={1000} value={text} onChange={(e) => setText(e.target.value)} placeholder={'Ej. ' + EXAMPLES[0]} />

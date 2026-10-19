@@ -5,7 +5,7 @@ import { PLANS, defaultPlan, setPlans, money } from './lib/domain.js';
 import { Loading } from './ui/ui.jsx';
 import PlanCard from './ui/PlanCard.jsx';
 
-// Formulario público para que un jugador pida plaza. No necesita cuenta.
+// Formulario público para que un cliente pida plaza. No necesita cuenta.
 export default function PublicLead({ slug }) {
   const [brand, setBrand] = useState(undefined);
   const [f, setF] = useState({ name: '', phone: '', email: '', position: '', plan: defaultPlan().name, goal: '', injuries: '', message: '', ok: false });

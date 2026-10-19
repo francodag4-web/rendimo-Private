@@ -141,7 +141,7 @@ export function fill(text, vars) {
   return text.replace(/\{(\w+)\}/g, (_, k) => (vars[k] != null && vars[k] !== '' ? vars[k] : '')).replace(/ \(\)/g, '').replace(/\s{2,}/g, ' ').replace(/ ([.,:!?])/g, '$1').trim();
 }
 
-// Versión según el jugador y el día: cambia de un mensaje a otro sin repetir siempre el mismo
+// Versión según el cliente y el día: cambia de un mensaje a otro sin repetir siempre el mismo
 export function pick(kind, seed = '', offset = 0) {
   const list = (MESSAGES[kind] || MESSAGES.libre).list;
   let h = 0; const s = `${seed}|${new Date().toISOString().slice(0, 10)}`;

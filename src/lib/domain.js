@@ -47,7 +47,7 @@ export function payCover(p, payments = [], mk) {
   return { row: r, paid: !!r, period: MONTH_NAMES[Number(mk.slice(5, 7)) - 1], months: [mk] };
 }
 
-// Datos que cambian al pasar a un jugador a un plan
+// Datos que cambian al pasar a un cliente a un plan
 export const planPatch = (plan, p = {}) => {
   const d = PLANS.find((x) => x.name === plan);
   if (!d) return { plan };
@@ -163,7 +163,7 @@ export const FLAGS = [
   ['contacto', 'Sin contacto', /placaje|contacto|ruck|maul|mel[eé]|scrum|tackle/i],
 ];
 export const flagLabel = (k) => FLAGS.find((f) => f[0] === k)?.[1] || k;
-// Devuelve las restricciones del jugador que chocan con un ejercicio
+// Devuelve las restricciones del cliente que chocan con un ejercicio
 export const clashes = (flags = [], exerciseName = '', ex = null) => {
   const txt = `${exerciseName} ${ex?.type || ''} ${ex?.category || ''}`;
   return FLAGS.filter(([k, , re]) => flags.includes(k) && (re.test(txt) || (k === 'saltos' && /pliometr/i.test(ex?.type || '')) || (k === 'sprint' && /^velocidad$/i.test(ex?.type || ''))));

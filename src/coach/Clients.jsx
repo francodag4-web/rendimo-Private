@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useCoach } from './CoachApp.jsx';
-import { supabase, q } from '../lib/supabase.js';
+import { supabase, q, qOpt } from '../lib/supabase.js';
 import { matches, iso, fmtDate, waURL, monthsActive, wellness, addDays, mondayOf, parseISO } from '../lib/util.js';
 import { useAction, useToast, Tabs, Empty, Bars, Line, WAIcon } from '../ui/ui.jsx';
 import { waText } from './Home.jsx';
 import { MESSAGES, variants } from '../lib/messages.js';
 import { calendarWeekIdx, totalWeeks } from '../lib/program.js';
+import { assignTemplates, SelBar } from './Programs.jsx';
 import {
-  PLANS, defaultPlan, planOptions, planDefaults, feeText, commitment, reviewInfo, REVIEW_OPTIONS, SCREENING, wellLevel, monthKey,
+  PLANS, defaultPlan, planOptions, planPatch, feeLabel, planDefaults, feeText, commitment, reviewInfo, REVIEW_OPTIONS, SCREENING, wellLevel, monthKey,
   TEST_PRESETS, presetOf, fmtNum, testValue, asym, testSummary, severity, INJ_STATUS, SIDES, ZONES, zoneName,
   FLAGS, EVO_CATS, evoLabel, isRecord, payCover,
 } from '../lib/domain.js';
@@ -36,6 +37,8 @@ function PlayerList() {
   const { players, go, checkins, payments = [] } = useCoach();
   const [qy, setQy] = useState('');
   const [show, setShow] = useState('activos');
+  const [sel, setSel] = useState([]);
+  const toggle = (id) => setSel((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
   const baja = show === 'baja';
   const list = players.filter((p) => (baja ? !!p.end_date : !p.end_date) && matches(`${p.name} ${p.position || ''} ${p.plan || ''} ${p.email}`, qy));
   const ended = players.filter((p) => p.end_date);
@@ -51,27 +54,29 @@ function PlayerList() {
   return (
     <>
       <div className="pagehead">
-        <div><h1>Jugadores</h1><p>{players.filter((p) => !p.end_date).length} activos{avg != null ? ` · permanencia media ${avg.toFixed(1).replace('.', ',')} meses` : ''}</p></div>
-        <button className="btn pri" onClick={() => go('clientes', 'nuevo')}>+ Nuevo jugador</button>
+        <div><h1>Clientes</h1><p>{players.filter((p) => !p.end_date).length} activos{avg != null ? ` · permanencia media ${avg.toFixed(1).replace('.', ',')} meses` : ''}</p></div>
+        <button className="btn pri" onClick={() => go('clientes', 'nuevo')}>+ Nuevo cliente</button>
       </div>
       {!baja && players.some((p) => !p.end_date) && (
         <details className="panel"><summary style={{ cursor: 'pointer', fontWeight: 700 }}>✎ Nota de la semana para todos</summary><div style={{ marginTop: 10 }}><WeekNoteEditor all /></div></details>
       )}
       <div className="row">
         <input id="cq" style={{ maxWidth: 320 }} placeholder="Buscar por nombre, posición o plan" value={qy} onChange={(e) => setQy(e.target.value)} />
-        <Tabs tabs={[['activos', 'Activos'], ['baja', 'De baja']]} value={show} onChange={setShow} />
+        <Tabs tabs={[['activos', 'Activos'], ['baja', 'De baja']]} value={show} onChange={(v) => { setShow(v); setSel([]); }} />
       </div>
+      {sel.length > 0 && <ClientSelBar chosen={players.filter((p) => sel.includes(p.id))} onClear={() => setSel([])} />}
       {list.length ? (
         <div className="panel tablewrap">
-          <table>
-            <thead><tr><th>Nombre</th><th>Posición</th><th>Plan</th><th>Alta</th>{baja && <><th>Baja</th><th>Motivo</th></>}<th>Tiempo</th>{!baja && <><th>Revisión</th><th>Bienestar</th><th>Pago {['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'][Number(mk.slice(5)) - 1]}</th><th>Acceso</th></>}</tr></thead>
+          <table className="seltbl">
+            <thead><tr><th style={{ width: 28 }}><input type="checkbox" aria-label="Seleccionar todos" checked={list.every((p) => sel.includes(p.id))} onChange={() => setSel(list.every((p) => sel.includes(p.id)) ? [] : list.map((p) => p.id))} /></th><th>Nombre</th><th>Posición / tipo</th><th>Plan</th><th>Alta</th>{baja && <><th>Baja</th><th>Motivo</th></>}<th>Tiempo</th>{!baja && <><th>Revisión</th><th>Bienestar</th><th>Pago {['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'][Number(mk.slice(5)) - 1]}</th><th>Acceso</th></>}</tr></thead>
             <tbody>
               {list.map((p) => {
                 const c = lastCheckin(checkins, p.id); const w = wellness(c); const r = reviewInfo(p);
                 return (
-                  <tr key={p.id} style={{ cursor: 'pointer' }} onClick={() => go('clientes', p.id)}>
+                  <tr key={p.id} className={sel.includes(p.id) ? 'on' : ''} style={{ cursor: 'pointer' }} onClick={() => go('clientes', p.id)}>
+                    <td onClick={(e) => e.stopPropagation()}><input type="checkbox" aria-label={`Seleccionar ${p.name}`} checked={sel.includes(p.id)} onChange={() => toggle(p.id)} /></td>
                     <td><b>{p.name}</b><Flag p={p} sm /></td>
-                    <td>{p.position || '—'}</td>
+                    <td>{p.position || (p.kind === 'personal' ? 'Entrenamiento personal' : '—')}</td>
                     <td>{p.plan || '—'}</td>
                     <td className="num">{fmtDate(p.start_date)}</td>
                     {baja && <><td className="num">{fmtDate(p.end_date)}</td><td>{p.end_reason || '—'}</td></>}
@@ -88,7 +93,64 @@ function PlayerList() {
             </tbody>
           </table>
         </div>
-      ) : <Empty>{players.length ? 'Nadie coincide con la búsqueda.' : 'Aún no tienes jugadores. Añade el primero con «+ Nuevo jugador».'}</Empty>}
+      ) : <Empty>{players.length ? 'Nadie coincide con la búsqueda.' : 'Aún no tienes clientes. Añade el primero con «+ Nuevo cliente».'}</Empty>}
+    </>
+  );
+}
+
+// Acciones sobre varios clientes a la vez
+function ClientSelBar({ chosen, onClear }) {
+  const { programs, uid, load } = useCoach();
+  const act = useAction();
+  const tpls = programs.filter((x) => !x.player_id);
+  const [mode, setMode] = useState(null);
+  const [tid, setTid] = useState(tpls[0]?.id || '');
+  const [start, setStart] = useState(iso(mondayOf(addDays(new Date(), 7))));
+  const [plan, setPlan] = useState(defaultPlan().name);
+  const n = chosen.length;
+  const who = `${n} cliente${n === 1 ? '' : 's'}`;
+  const doTpl = () => act(async () => {
+    await assignTemplates({ uid, templates: tpls.filter((x) => x.id === tid), clients: chosen, start });
+    await load('programs'); onClear();
+  }, `Plantilla asignada a ${who}.`);
+  const doPlan = () => act(async () => {
+    for (const p of chosen) await q(supabase.from('players').update(planPatch(plan, p)).eq('id', p.id));
+    await load('players'); onClear();
+  }, `${who} ${n === 1 ? "pasa" : "pasan"} a ${plan}.`);
+  const doDel = () => act(async () => {
+    await q(supabase.from('players').delete().in('id', chosen.map((p) => p.id)));
+    await load(); onClear();
+  }, `${who} ${n === 1 ? "eliminado" : "eliminados"} con todos sus datos.`);
+  return (
+    <>
+      <SelBar n={n} noun="cliente" onClear={onClear}>
+        <button className={'btn sm' + (mode === 'tpl' ? ' pri' : '')} aria-expanded={mode === 'tpl'} onClick={() => setMode(mode === 'tpl' ? null : 'tpl')}>Asignar plantilla</button>
+        <button className={'btn sm' + (mode === 'plan' ? ' pri' : '')} aria-expanded={mode === 'plan'} onClick={() => setMode(mode === 'plan' ? null : 'plan')}>Cambiar plan</button>
+        <button className={'btn sm danger'} aria-expanded={mode === 'del'} onClick={() => setMode(mode === 'del' ? null : 'del')}>Eliminar</button>
+      </SelBar>
+      {mode === 'tpl' && (tpls.length ? (
+        <section className="panel row" aria-label="Asignar plantilla">
+          <b>Plantilla</b>
+          <select id="msel-tpl" style={{ width: 'auto', maxWidth: 360 }} value={tid} onChange={(e) => setTid(e.target.value)}>{tpls.map((t) => <option key={t.id} value={t.id}>{t.name} · {totalWeeks(t.data)} sem</option>)}</select>
+          <label className="row small">Empieza el<input type="date" style={{ width: 'auto' }} value={start} onChange={(e) => setStart(e.target.value)} /></label>
+          <button className="btn pri" onClick={doTpl}>Asignar a {who}</button>
+        </section>
+      ) : <Empty>Aún no tienes plantillas. Créalas en Programación.</Empty>)}
+      {mode === 'plan' && (
+        <section className="panel row" aria-label="Cambiar plan">
+          <b>Plan</b>
+          <select id="msel-plan" style={{ width: 'auto' }} value={plan} onChange={(e) => setPlan(e.target.value)}>{PLANS.map((x) => <option key={x.name} value={x.name}>{x.name} · {feeLabel(x)}</option>)}</select>
+          <button className="btn pri" onClick={doPlan}>Pasar a {who}</button>
+          <span className="muted small">Pone el importe, el tipo de pago, el compromiso y las revisiones del plan.</span>
+        </section>
+      )}
+      {mode === 'del' && (
+        <section className="panel stack" aria-label="Eliminar clientes" style={{ borderColor: 'var(--bad)' }}>
+          <b>¿Borrar a {chosen.map((p) => p.name).join(', ')} y todo su historial?</b>
+          <p className="muted small">No se puede deshacer. Para una baja normal pon la fecha de baja en su ficha: así se conserva el historial.</p>
+          <div className="row"><button className="btn danger" onClick={doDel}>Sí, borrar {who}</button><button className="btn" onClick={() => setMode(null)}>No</button></div>
+        </section>
+      )}
     </>
   );
 }
@@ -96,30 +158,33 @@ function PlayerList() {
 function NewPlayer() {
   const { uid, load, go, coach } = useCoach();
   const act = useAction();
-  const [f, setF] = useState({ name: '', email: '', phone: '', position: '', plan: defaultPlan().name, fee: defaultPlan().fee, fee_type: defaultPlan().type, start_date: iso(), objective: '', review_days: 14, commitment_months: 3 });
+  const [f, setF] = useState({ kind: 'equipo', name: '', email: '', phone: '', position: '', plan: defaultPlan().name, fee: defaultPlan().fee, fee_type: defaultPlan().type, start_date: iso(), objective: '', review_days: 14, commitment_months: 3 });
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   const setPlan = (e) => { const d = planDefaults(e.target.value); setF({ ...f, plan: e.target.value, ...(d ? { fee: d.fee, fee_type: d.type, commitment_months: d.commitment ?? '', review_days: d.review || f.review_days } : {}) }); };
   const save = (e) => {
     e.preventDefault();
     act(async () => {
       const rd = Number(f.review_days) || 14;
-      const row = await q(supabase.from('players').insert({
+      const row = await qOpt((x) => supabase.from('players').insert(x).select().single(), {
         ...f, coach_id: uid, email: f.email.trim().toLowerCase(), name: f.name.trim(), fee: f.fee === '' ? null : Number(f.fee),
         review_days: rd, commitment_months: Number(f.commitment_months) || null, next_review: iso(addDays(parseISO(f.start_date), rd)), objective: f.objective || null,
-      }).select().single());
+      });
       await load('players');
       go('clientes', row.id);
-    }, 'Jugador añadido. Mándale el acceso por WhatsApp.');
+    }, 'Cliente añadido. Mándale el acceso por WhatsApp.');
   };
   return (
     <>
-      <div className="pagehead"><div><h1>Nuevo jugador</h1><p>Con su correo podrá entrar y ver solo lo suyo.</p></div><button className="btn" onClick={() => go('clientes')}>Volver</button></div>
+      <div className="pagehead"><div><h1>Nuevo cliente</h1><p>Con su correo podrá entrar y ver solo lo suyo.</p></div><button className="btn" onClick={() => go('clientes')}>Volver</button></div>
       <form className="panel stack" onSubmit={save} style={{ maxWidth: 720 }}>
         <div className="grid2">
+          <fieldset className="f kindpick" style={{ gridColumn: '1 / -1' }}><legend>Tipo de cliente</legend>
+            <KindPick value={f.kind} onChange={(v) => setF({ ...f, kind: v })} />
+          </fieldset>
           <label className="f">Nombre y apellidos<input id="np-name" required value={f.name} onChange={set('name')} /></label>
           <label className="f">Correo (con el que entrará)<input id="np-email" type="email" required value={f.email} onChange={set('email')} /></label>
           <label className="f">WhatsApp (con prefijo, ej. 34600111222)<input id="np-phone" inputMode="tel" value={f.phone} onChange={set('phone')} /></label>
-          <label className="f">Posición o deporte<input id="np-pos" value={f.position} onChange={set('position')} placeholder="Ej. Pilier, Ala…" /></label>
+          <label className="f">{f.kind === 'personal' ? 'Deporte o actividad (opcional)' : 'Posición o deporte'}<input id="np-pos" value={f.position} onChange={set('position')} placeholder={f.kind === 'personal' ? 'Ej. Running, pádel…' : 'Ej. Pilier, Ala…'} /></label>
           <label className="f">Plan<select id="np-plan" value={f.plan} onChange={setPlan}>{planOptions().map((p) => <option key={p}>{p}</option>)}</select></label>
           <label className="f">Importe (€)<span className="row"><input id="np-fee" inputMode="decimal" style={{ flex: 1 }} value={f.fee ?? ''} onChange={set('fee')} /><select style={{ width: 'auto' }} value={f.fee_type} onChange={set('fee_type')}><option value="mensual">al mes</option><option value="trimestral">al trimestre</option><option value="unico">único</option></select></span></label>
           <label className="f">Fecha de alta<input id="np-start" type="date" required value={f.start_date} onChange={set('start_date')} /></label>
@@ -127,7 +192,7 @@ function NewPlayer() {
           <label className="f">Objetivo<input id="np-obj" value={f.objective} onChange={set('objective')} placeholder="Ej. Sprint 10 m < 1,80 s antes del 15/01" /></label>
           <label className="f">Revisiones<select value={f.review_days} onChange={set('review_days')}>{REVIEW_OPTIONS.map(([d, l]) => <option key={d} value={d}>{l}</option>)}</select></label>
         </div>
-        <div className="row"><button className="btn pri" type="submit">Guardar jugador</button></div>
+        <div className="row"><button className="btn pri" type="submit">Guardar cliente</button></div>
         <p className="muted small">Después de guardar te aparece el botón para mandarle el acceso por WhatsApp ({coach.brand_name}).</p>
       </form>
     </>
@@ -155,7 +220,7 @@ function PlayerDetail({ id }) {
   }, 'Revisión hecha. La siguiente queda programada.');
   return (
     <>
-      <button className="btn ghost sm" style={{ justifySelf: 'start' }} onClick={() => go('clientes')}>← Todos los jugadores</button>
+      <button className="btn ghost sm" style={{ justifySelf: 'start' }} onClick={() => go('clientes')}>← Todos los clientes</button>
       <div className="pagehead">
         <div>
           <h1 style={{ fontSize: 'clamp(30px,5vw,44px)' }}>{p.name}<Flag p={p} /></h1>
@@ -308,7 +373,7 @@ export function Evolution({ p }) {
   });
   return (
     <section className="panel stack">
-      <div><h3>Evolución y ajustes</h3><p className="muted small">Lo que valoras, lo que el jugador te cuenta y lo que cambias en su plan. Aparece también en su Programación.</p></div>
+      <div><h3>Evolución y ajustes</h3><p className="muted small">Lo que valoras, lo que el cliente te cuenta y lo que cambias en su plan. Aparece también en su Programación.</p></div>
       <Tabs tabs={[['', 'Todo'], ['ajuste', 'Ajustes de plan'], ['valor', 'Valoraciones'], ['molestia', 'Molestias'], ['test', 'Tests'], ['comunicacion', 'Comunicación']]} value={cat} onChange={setCat} />
       {mine.length ? (
         <ul className="list evo">
@@ -420,7 +485,7 @@ function BodyMap({ list, onPick }) {
                 {['izq', 'der'].map((side) => {
                   const mirrored = z[2] !== 60;
                   if (!mirrored && side === 'der') return null;
-                  // En la vista frontal la izquierda del jugador queda a la derecha del dibujo
+                  // En la vista frontal la izquierda del cliente queda a la derecha del dibujo
                   const x = !mirrored ? 60 : (v === 'f') === (side === 'izq') ? 120 - z[2] : z[2];
                   const hits = list.filter((i) => i.zone === z[0] && (!mirrored || i.side === side || i.side === 'central' || !i.side));
                   const st = hits.find((h) => h.status === 'activa') ? 'activa' : hits.find((h) => h.status === 'readaptacion') ? 'readaptacion' : hits.length ? 'recuperada' : null;
@@ -515,13 +580,14 @@ function Data({ p }) {
   const save = (e) => {
     e.preventDefault();
     act(async () => {
-      const keys = ['name', 'phone', 'position', 'plan', 'start_date', 'end_date', 'end_reason', 'important', 'restrictions', 'objective', 'club_days', 'extra_days', 'equipment', 'fee_type', 'flags'];
+      const keys = ['kind', 'name', 'phone', 'position', 'plan', 'start_date', 'end_date', 'end_reason', 'important', 'restrictions', 'objective', 'club_days', 'extra_days', 'equipment', 'fee_type', 'flags'];
       const patch = Object.fromEntries(keys.map((k) => [k, f[k] ?? null]));
       patch.flags = f.flags || [];
       patch.email = (f.email || '').trim().toLowerCase();
       patch.fee = f.fee == null || f.fee === '' ? null : Number(String(f.fee).replace(',', '.'));
       patch.commitment_months = f.commitment_months == null || f.commitment_months === '' ? null : Number(f.commitment_months);
-      await q(supabase.from('players').update(patch).eq('id', p.id));
+      if (!p.kind && patch.kind === 'equipo') delete patch.kind;
+      await qOpt((x) => supabase.from('players').update(x).eq('id', p.id), patch);
       await load('players');
     }, 'Datos guardados.');
   };
@@ -529,19 +595,20 @@ function Data({ p }) {
     await q(supabase.from('players').delete().eq('id', p.id));
     await load();
     go('clientes');
-  }, 'Jugador y todos sus datos eliminados.');
+  }, 'Cliente y todos sus datos eliminados.');
   const [confirm, setConfirm] = useState(false);
   return (
     <form className="panel stack" onSubmit={save}>
+      <fieldset className="f kindpick"><legend>Tipo de cliente</legend><KindPick value={f.kind || 'equipo'} onChange={(v) => setF({ ...f, kind: v })} /></fieldset>
       <div className="grid2">
         <label className="f">Nombre<input value={f.name || ''} onChange={set('name')} required /></label>
         <label className="f">Correo<input type="email" value={f.email || ''} onChange={set('email')} required /></label>
         <label className="f">WhatsApp<input value={f.phone || ''} onChange={set('phone')} /></label>
-        <label className="f">Posición<input value={f.position || ''} onChange={set('position')} /></label>
+        <label className="f">{f.kind === 'personal' ? 'Deporte o actividad' : 'Posición'}<input value={f.position || ''} onChange={set('position')} /></label>
         <label className="f">Plan<select value={f.plan || ''} onChange={(e) => { const d = planDefaults(e.target.value); setF({ ...f, plan: e.target.value, ...(d ? { fee: d.fee, fee_type: d.type, commitment_months: d.commitment } : {}) }); }}>{planOptions(f.plan).map((x) => <option key={x}>{x}</option>)}</select></label>
         <label className="f">Importe (€)<span className="row"><input id="d-fee" inputMode="decimal" style={{ flex: 1 }} value={f.fee ?? ''} onChange={set('fee')} /><select style={{ width: 'auto' }} value={f.fee_type || 'mensual'} onChange={set('fee_type')}><option value="mensual">al mes</option><option value="trimestral">al trimestre</option><option value="unico">único</option></select></span></label>
         <label className="f">Objetivo<input id="d-obj" value={f.objective || ''} onChange={set('objective')} placeholder="Ej. Sprint 10 m < 1,80 s antes del 15/01" /></label>
-        <label className="f">Club / partido<input id="d-club" value={f.club_days || ''} onChange={set('club_days')} placeholder="Ej. Mar y jue · domingo" /></label>
+        {f.kind !== 'personal' && <label className="f">Club / partido<input id="d-club" value={f.club_days || ''} onChange={set('club_days')} placeholder="Ej. Mar y jue · domingo" /></label>}
         <label className="f">Días extra conmigo<input value={f.extra_days || ''} onChange={set('extra_days')} placeholder="Ej. Lun, mié, vie · 60 min" /></label>
         <label className="f">Material<input value={f.equipment || ''} onChange={set('equipment')} placeholder="Ej. Gimnasio completo" /></label>
         <label className="f">Alta<input type="date" value={f.start_date || ''} onChange={set('start_date')} required /></label>
@@ -560,7 +627,7 @@ function Data({ p }) {
         <button className="btn pri" type="submit">Guardar datos</button>
         {confirm
           ? <span className="row"><span className="small">¿Borrar a {p.name} y todo su historial? No se puede deshacer.</span><button type="button" className="btn danger" onClick={remove}>Sí, borrar</button><button type="button" className="btn" onClick={() => setConfirm(false)}>No</button></span>
-          : <button type="button" className="btn danger" onClick={() => setConfirm(true)}>Eliminar jugador</button>}
+          : <button type="button" className="btn danger" onClick={() => setConfirm(true)}>Eliminar cliente</button>}
       </div>
       <p className="muted small">Para una baja normal pon la fecha de baja y el motivo: así se conserva el historial y se calcula la permanencia media. Eliminar borra todo (derecho de supresión del RGPD).</p>
     </form>
@@ -592,11 +659,23 @@ function WaComposer({ p, kinds }) {
   );
 }
 
-// Jugador que aún no está en la lista: recarga una vez antes de decir que no existe
+// Cliente que aún no está en la lista: recarga una vez antes de decir que no existe
 function MissingPlayer({ id }) {
   const { load, go } = useCoach();
   const [tried, setTried] = useState(false);
   useEffect(() => { let off = false; load('players').finally(() => { if (!off) setTried(true); }); return () => { off = true; }; }, [id]);
   if (!tried) return <p className="muted">Cargando…</p>;
-  return <Empty>No se encuentra este jugador. <button className="btn sm" onClick={() => go('clientes')}>Volver</button></Empty>;
+  return <Empty>No se encuentra este cliente. <button className="btn sm" onClick={() => go('clientes')}>Volver</button></Empty>;
+}
+
+// Juega en un equipo (club, partidos, RPE del club) o entrena por su cuenta
+export const KINDS = [['equipo', 'Juega en un equipo', 'Club, partidos y RPE del club'], ['personal', 'Entrenamiento personal', 'Sin club ni partidos']];
+function KindPick({ value, onChange }) {
+  return (
+    <div className="seg" role="radiogroup" aria-label="Tipo de cliente">
+      {KINDS.map(([k, l, d]) => (
+        <button type="button" key={k} role="radio" aria-checked={value === k} className={value === k ? 'on' : ''} onClick={() => onChange(k)}><b>{l}</b><span className="muted small">{d}</span></button>
+      ))}
+    </div>
+  );
 }
