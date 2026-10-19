@@ -459,6 +459,9 @@ function Week({ ctx }) {
           <button className="btn sm" disabled={w >= totalWeeks(prog.data) - 1} onClick={() => setOff(off + 1)}>Siguiente ›</button>
         </div>
       </Hero>
+      {(() => { const ph = prog.data.phases.find((x) => x.weeks.some((y) => y.id === wk?.id)); return ph?.notes ? (
+        <details className="panel"><summary style={{ cursor: 'pointer' }}><b>Objetivos de esta fase</b></summary><p className="small" style={{ whiteSpace: 'pre-line', marginTop: 8 }}>{ph.notes}</p></details>
+      ) : null; })()}
       <div className="week">
         {Array.from({ length: 7 }, (_, i) => {
           const day = i + 1; const date = monday ? iso(addDays(monday, i)) : null;

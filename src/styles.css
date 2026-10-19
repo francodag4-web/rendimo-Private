@@ -368,3 +368,8 @@ th{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--mute
   .main{padding-bottom:120px}
   .toasts{bottom:calc(100px + env(safe-area-inset-bottom,0))}
 }
+.board.protos .tile{min-height:0}
+.board.protos details summary{cursor:pointer;font-weight:700}
+.board.protos .btn{background:#fff;color:#1b1b1b;border-color:#fff}
+.board.protos .btn.sm{background:transparent;color:inherit;border-color:rgba(255,255,255,.6)}
+.t-a.tile .btn.sm{border-color:rgba(0,0,0,.35)}

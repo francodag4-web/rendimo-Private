@@ -13,6 +13,7 @@ import { MUSCLES } from './Library.jsx';
 import Flag, { importantOf } from './Flag.jsx';
 import WeekNoteEditor from './WeekNote.jsx';
 import ClubEditor from '../ui/ClubEditor.jsx';
+import { TemplateImporter, ProtocolGallery, exportProgramCSV } from './TemplateTools.jsx';
 import { useClub, clubDay, matchText, nextMatch } from '../lib/club.js';
 import { sessionDate } from '../lib/program.js';
 
@@ -26,6 +27,7 @@ function ProgramList() {
   const act = useAction();
   const [show, setShow] = useState('tpl');
   const [qy, setQy] = useState('');
+  const [tool, setTool] = useState(null); // 'csv' | 'proto'
   const pname = (id) => players.find((p) => p.id === id)?.name || '';
   const list = programs.filter((p) => (show === 'tpl' ? !p.player_id : !!p.player_id) && matches(`${p.name} ${pname(p.player_id)}`, qy));
   const create = () => act(async () => {
@@ -37,8 +39,14 @@ function ProgramList() {
     <>
       <div className="pagehead">
         <div><h1>Programación</h1><p>Crea plantillas y asígnalas. Cada jugador recibe una copia: si cambias la plantilla, lo asignado no cambia.</p></div>
-        <button className="btn pri" onClick={create}>+ Nueva plantilla</button>
+        <div className="row">
+          <button className="btn" aria-expanded={tool === 'proto'} onClick={() => setTool(tool === 'proto' ? null : 'proto')}>Protocolos de readaptación</button>
+          <button className="btn" aria-expanded={tool === 'csv'} onClick={() => setTool(tool === 'csv' ? null : 'csv')}>Importar CSV</button>
+          <button className="btn pri" onClick={create}>+ Nueva plantilla</button>
+        </div>
       </div>
+      {tool === 'csv' && <TemplateImporter onClose={() => setTool(null)} />}
+      {tool === 'proto' && <ProtocolGallery onClose={() => setTool(null)} />}
       <div className="row">
         <Tabs tabs={[['tpl', 'Plantillas'], ['asig', 'Asignados a jugadores']]} value={show} onChange={setShow} />
         <input style={{ maxWidth: 280 }} placeholder="Buscar" value={qy} onChange={(e) => setQy(e.target.value)} />
@@ -209,6 +217,11 @@ function Editor({ id }) {
             <button className="btn sm" onClick={() => { mut((d) => { const c = cloneWithNewIds(d.phases[pi]); c.name = `${c.name} (copia)`; d.phases.splice(pi + 1, 0, c); }); setPh(pi + 1); setWk(0); }}>Duplicar fase</button>
             {phases.length > 1 && <button className="btn sm danger" onClick={() => { delWithUndo((d) => d.phases.splice(pi, 1), `Fase «${phase.name}» eliminada.`); setPh(0); setWk(0); }}>Eliminar fase</button>}
           </div>
+          <details open={!!phase.notes}>
+            <summary className="small" style={{ cursor: 'pointer', fontWeight: 700 }}>Objetivos y criterios para pasar de fase</summary>
+            <textarea aria-label="Objetivos y criterios de la fase" rows={phase.notes ? Math.min(10, phase.notes.split('\n').length + 1) : 3} style={{ marginTop: 6 }}
+              placeholder="Ej. Duración orientativa, objetivos, criterios para avanzar y qué evitar" value={phase.notes || ''} onChange={(e) => mut((d) => { d.phases[pi].notes = e.target.value; })} />
+          </details>
           {/* Semanas */}
           <div className="between">
             <div className="weekbar">
@@ -298,6 +311,10 @@ function Editor({ id }) {
         </>
       )}
 
+      {prog.data.refs?.length > 0 && (
+        <details className="panel small"><summary style={{ cursor: 'pointer' }}><b>Bibliografía</b></summary><ul style={{ margin: '8px 0 0', paddingLeft: 18 }}>{prog.data.refs.map((r) => <li key={r}>{r}</li>)}</ul></details>
+      )}
+      <div className="row"><button className="btn sm" onClick={() => exportProgramCSV(prog)}>Descargar en CSV (Excel)</button></div>
       <Danger prog={prog} />
     </>
   );
