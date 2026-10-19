@@ -1,7 +1,26 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { supabase, PLATFORM } from './lib/supabase.js';
 
+// Código de invitación guardado al abrir el enlace #/unirse/<código>
+export const getInvite = () => { try { return localStorage.getItem('invite'); } catch { return null; } };
+export const setInvite = (v) => { try { v ? localStorage.setItem('invite', v) : localStorage.removeItem('invite'); } catch {} };
+
 export default function Login() {
+  const invite = getInvite();
+  const [inv, setInv] = useState(null); // datos del entrenador que invita
+  useEffect(() => {
+    if (!invite) return;
+    supabase.rpc('public_invite', { code: invite }).then(({ data }) => {
+      if (!data) return;
+      setInv(data);
+      const c = data.color || '';
+      if (/^#[0-9a-f]{6}$/i.test(c)) {
+        const [r, g, bl] = [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
+        document.documentElement.style.setProperty('--brand', c);
+        document.documentElement.style.setProperty('--brand-ink', (0.299 * r + 0.587 * g + 0.114 * bl) / 255 > 0.6 ? '#111' : '#fff');
+      }
+    });
+  }, [invite]);
   const [email, setEmail] = useState('');
   const [pass, setPass] = useState('');
   const [usePass, setUsePass] = useState(false);
@@ -16,7 +35,7 @@ export default function Login() {
     const mail = email.trim().toLowerCase();
     const { error } = usePass
       ? await supabase.auth.signInWithPassword({ email: mail, password: pass })
-      : await supabase.auth.signInWithOtp({ email: mail, options: { emailRedirectTo: window.location.origin } });
+      : await supabase.auth.signInWithOtp({ email: mail, options: { emailRedirectTo: window.location.origin, ...(invite ? { data: { invite } } : {}) } });
     setBusy(false);
     if (error) {
       setErr(/Invalid login/i.test(error.message) ? 'Correo o contraseña incorrectos.'
@@ -31,10 +50,19 @@ export default function Login() {
   return (
     <div className="center">
       <form className="card" onSubmit={submit}>
-        <div>
-          <h1>{PLATFORM}</h1>
-          <p className="muted">Tu entrenamiento, tu progreso y tu entrenador en un sitio.</p>
-        </div>
+        {inv && !inv.used ? (
+          <div className="invite">
+            {inv.logo && <img src={inv.logo} alt="" />}
+            <h1>Hola, {inv.name}</h1>
+            <p><b>{inv.brand_name || 'Tu entrenador'}</b> te ha invitado a su app. Pon tu correo y te mandamos un enlace para entrar: tu cuenta queda vinculada a tu ficha.</p>
+          </div>
+        ) : (
+          <div>
+            <h1>{PLATFORM}</h1>
+            <p className="muted">Tu entrenamiento, tu progreso y tu entrenador en un sitio.</p>
+            {inv?.used && <p className="small">Esta invitación ya se usó. Entra con el correo con el que te registraste.</p>}
+          </div>
+        )}
         {sent ? (
           <>
             <p>Te hemos enviado un enlace a <b>{email}</b>. Ábrelo desde este mismo dispositivo para entrar.</p>
@@ -53,7 +81,7 @@ export default function Login() {
             )}
             {err && <p style={{ color: 'var(--bad)' }} role="alert">{err}</p>}
             <button className="btn pri" type="submit" disabled={busy}>
-              {busy ? 'Un momento…' : usePass ? 'Entrar' : 'Enviarme enlace de acceso'}
+              {busy ? 'Un momento…' : usePass ? 'Entrar' : inv && !inv.used ? 'Crear mi acceso' : 'Enviarme enlace de acceso'}
             </button>
             <button type="button" className="btn ghost small" onClick={() => { setUsePass(!usePass); setErr(''); }}>
               {usePass ? 'Prefiero entrar con un enlace por correo' : 'Entrar con contraseña'}

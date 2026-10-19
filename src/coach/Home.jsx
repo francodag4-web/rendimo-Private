@@ -9,8 +9,10 @@ import { reviewInfo, isRecord, testValue, fmtNum, monthKey, monthName, feeText, 
 import Flag from './Flag.jsx';
 
 // Mensajes de WhatsApp: varias versiones por situación (ver lib/messages.js)
+// Enlace personal de invitación: el cliente se registra con su correo al abrirlo
+export const inviteLink = (p) => (p.invite_code ? `${window.location.origin}/#/unirse/${p.invite_code}` : window.location.origin);
 export const waVars = (p, coach, extra = '') => ({
-  nombre: (p.name || '').split(' ')[0], coach: coach?.brand_short || coach?.brand_name || '', web: window.location.origin, email: p.email,
+  nombre: (p.name || '').split(' ')[0], coach: coach?.brand_short || coach?.brand_name || '', web: window.location.origin, email: p.email, enlace: inviteLink(p),
   mes: extra, marca: extra, dolor: extra, importe: feeText(p), meses: p.commitment_months || 3, plan: '',
 });
 export const waText = (p, kind, coach, extra = '', offset = 0) => fill(pick(kind, (p.id || p.name) + kind, offset), waVars(p, coach, extra));

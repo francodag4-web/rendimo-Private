@@ -50,7 +50,7 @@ export default function PublicLead({ slug }) {
             <div className="grid2">
               <label className="f">WhatsApp<input id="pl-phone" required inputMode="tel" maxLength={40} value={f.phone} onChange={set('phone')} placeholder="+34 600 111 222" /></label>
               <label className="f">Correo<input id="pl-email" type="email" maxLength={160} value={f.email} onChange={set('email')} /></label>
-              <label className="f">Posición<input id="pl-pos" maxLength={80} value={f.position} onChange={set('position')} placeholder="Ej. Apertura, flanker…" /></label>
+              <label className="f">Posición o deporte<input id="pl-pos" maxLength={80} value={f.position} onChange={set('position')} placeholder="Ej. Apertura, flanker, pádel, running…" /></label>
             </div>
             <fieldset className="planpick">
               <legend>Qué plan te interesa</legend>

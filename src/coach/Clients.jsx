@@ -3,7 +3,7 @@ import { useCoach } from './CoachApp.jsx';
 import { supabase, q, qOpt } from '../lib/supabase.js';
 import { matches, iso, fmtDate, waURL, monthsActive, wellness, addDays, mondayOf, parseISO } from '../lib/util.js';
 import { useAction, useToast, Tabs, Empty, Bars, Line, WAIcon } from '../ui/ui.jsx';
-import { waText } from './Home.jsx';
+import { waText, inviteLink } from './Home.jsx';
 import { MESSAGES, variants } from '../lib/messages.js';
 import { calendarWeekIdx, totalWeeks } from '../lib/program.js';
 import { assignTemplates, SelBar } from './Programs.jsx';
@@ -68,7 +68,7 @@ function PlayerList() {
       {list.length ? (
         <div className="panel tablewrap">
           <table className="seltbl">
-            <thead><tr><th style={{ width: 28 }}><input type="checkbox" aria-label="Seleccionar todos" checked={list.every((p) => sel.includes(p.id))} onChange={() => setSel(list.every((p) => sel.includes(p.id)) ? [] : list.map((p) => p.id))} /></th><th>Nombre</th><th>Posición / tipo</th><th>Plan</th><th>Alta</th>{baja && <><th>Baja</th><th>Motivo</th></>}<th>Tiempo</th>{!baja && <><th>Revisión</th><th>Bienestar</th><th>Pago {['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'][Number(mk.slice(5)) - 1]}</th><th>Acceso</th></>}</tr></thead>
+            <thead><tr><th style={{ width: 28 }}><input type="checkbox" aria-label="Seleccionar todos" checked={list.every((p) => sel.includes(p.id))} onChange={() => setSel(list.every((p) => sel.includes(p.id)) ? [] : list.map((p) => p.id))} /></th><th>Nombre</th><th>Posición o deporte</th><th>Plan</th><th>Alta</th>{baja && <><th>Baja</th><th>Motivo</th></>}<th>Tiempo</th>{!baja && <><th>Revisión</th><th>Bienestar</th><th>Pago {['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'][Number(mk.slice(5)) - 1]}</th><th>Acceso</th></>}</tr></thead>
             <tbody>
               {list.map((p) => {
                 const c = lastCheckin(checkins, p.id); const w = wellness(c); const r = reviewInfo(p);
@@ -166,12 +166,12 @@ function NewPlayer() {
     act(async () => {
       const rd = Number(f.review_days) || 14;
       const row = await qOpt((x) => supabase.from('players').insert(x).select().single(), {
-        ...f, coach_id: uid, email: f.email.trim().toLowerCase(), name: f.name.trim(), fee: f.fee === '' ? null : Number(f.fee),
+        ...f, coach_id: uid, email: f.email.trim().toLowerCase() || null, name: f.name.trim(), fee: f.fee === '' ? null : Number(f.fee),
         review_days: rd, commitment_months: Number(f.commitment_months) || null, next_review: iso(addDays(parseISO(f.start_date), rd)), objective: f.objective || null,
       });
       await load('players');
       go('clientes', row.id);
-    }, 'Cliente añadido. Mándale el acceso por WhatsApp.');
+    }, 'Cliente añadido. Mándale su enlace de acceso por WhatsApp.');
   };
   return (
     <>
@@ -182,9 +182,9 @@ function NewPlayer() {
             <KindPick value={f.kind} onChange={(v) => setF({ ...f, kind: v })} />
           </fieldset>
           <label className="f">Nombre y apellidos<input id="np-name" required value={f.name} onChange={set('name')} /></label>
-          <label className="f">Correo (con el que entrará)<input id="np-email" type="email" required value={f.email} onChange={set('email')} /></label>
+          <label className="f">Correo (opcional: si no lo sabes, se registra él con el enlace)<input id="np-email" type="email" value={f.email} onChange={set('email')} /></label>
           <label className="f">WhatsApp (con prefijo, ej. 34600111222)<input id="np-phone" inputMode="tel" value={f.phone} onChange={set('phone')} /></label>
-          <label className="f">{f.kind === 'personal' ? 'Deporte o actividad (opcional)' : 'Posición o deporte'}<input id="np-pos" value={f.position} onChange={set('position')} placeholder={f.kind === 'personal' ? 'Ej. Running, pádel…' : 'Ej. Pilier, Ala…'} /></label>
+          <label className="f">Posición o deporte<input id="np-pos" value={f.position} onChange={set('position')} placeholder={f.kind === 'personal' ? 'Ej. Running, pádel…' : 'Ej. Pilier, Ala…'} /></label>
           <label className="f">Plan<select id="np-plan" value={f.plan} onChange={setPlan}>{planOptions().map((p) => <option key={p}>{p}</option>)}</select></label>
           <label className="f">Importe (€)<span className="row"><input id="np-fee" inputMode="decimal" style={{ flex: 1 }} value={f.fee ?? ''} onChange={set('fee')} /><select style={{ width: 'auto' }} value={f.fee_type} onChange={set('fee_type')}><option value="mensual">al mes</option><option value="trimestral">al trimestre</option><option value="unico">único</option></select></span></label>
           <label className="f">Fecha de alta<input id="np-start" type="date" required value={f.start_date} onChange={set('start_date')} /></label>
@@ -193,7 +193,7 @@ function NewPlayer() {
           <label className="f">Revisiones<select value={f.review_days} onChange={set('review_days')}>{REVIEW_OPTIONS.map(([d, l]) => <option key={d} value={d}>{l}</option>)}</select></label>
         </div>
         <div className="row"><button className="btn pri" type="submit">Guardar cliente</button></div>
-        <p className="muted small">Después de guardar te aparece el botón para mandarle el acceso por WhatsApp ({coach.brand_name}).</p>
+        <p className="muted small">Después de guardar te aparece el botón para mandarle por WhatsApp su enlace personal de {coach.brand_name}. Con él se registra con su correo y queda vinculado a esta ficha.</p>
       </form>
     </>
   );
@@ -232,6 +232,7 @@ function PlayerDetail({ id }) {
             <select aria-label="Cribado" value={scr[0]} onChange={(e) => upd({ screening: e.target.value }, 'Cribado actualizado.')}
               style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', width: '100%' }}>{SCREENING.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
           </label>
+          {!p.user_id && p.invite_code && <CopyInvite p={p} />}
           {p.phone && <button type="button" className="btn pri" aria-expanded={waOpen} onClick={() => setWaOpen(!waOpen)}><WAIcon /> {p.user_id ? 'WhatsApp' : 'Enviar acceso'}</button>}
         </div>
       </div>
@@ -583,7 +584,7 @@ function Data({ p }) {
       const keys = ['kind', 'name', 'phone', 'position', 'plan', 'start_date', 'end_date', 'end_reason', 'important', 'restrictions', 'objective', 'club_days', 'extra_days', 'equipment', 'fee_type', 'flags'];
       const patch = Object.fromEntries(keys.map((k) => [k, f[k] ?? null]));
       patch.flags = f.flags || [];
-      patch.email = (f.email || '').trim().toLowerCase();
+      patch.email = (f.email || '').trim().toLowerCase() || null;
       patch.fee = f.fee == null || f.fee === '' ? null : Number(String(f.fee).replace(',', '.'));
       patch.commitment_months = f.commitment_months == null || f.commitment_months === '' ? null : Number(f.commitment_months);
       if (!p.kind && patch.kind === 'equipo') delete patch.kind;
@@ -602,9 +603,9 @@ function Data({ p }) {
       <fieldset className="f kindpick"><legend>Tipo de cliente</legend><KindPick value={f.kind || 'equipo'} onChange={(v) => setF({ ...f, kind: v })} /></fieldset>
       <div className="grid2">
         <label className="f">Nombre<input value={f.name || ''} onChange={set('name')} required /></label>
-        <label className="f">Correo<input type="email" value={f.email || ''} onChange={set('email')} required /></label>
+        <label className="f">Correo{p.user_id ? '' : ' (opcional)'}<input type="email" value={f.email || ''} onChange={set('email')} required={!!p.user_id} /></label>
         <label className="f">WhatsApp<input value={f.phone || ''} onChange={set('phone')} /></label>
-        <label className="f">{f.kind === 'personal' ? 'Deporte o actividad' : 'Posición'}<input value={f.position || ''} onChange={set('position')} /></label>
+        <label className="f">Posición o deporte<input value={f.position || ''} onChange={set('position')} /></label>
         <label className="f">Plan<select value={f.plan || ''} onChange={(e) => { const d = planDefaults(e.target.value); setF({ ...f, plan: e.target.value, ...(d ? { fee: d.fee, fee_type: d.type, commitment_months: d.commitment } : {}) }); }}>{planOptions(f.plan).map((x) => <option key={x}>{x}</option>)}</select></label>
         <label className="f">Importe (€)<span className="row"><input id="d-fee" inputMode="decimal" style={{ flex: 1 }} value={f.fee ?? ''} onChange={set('fee')} /><select style={{ width: 'auto' }} value={f.fee_type || 'mensual'} onChange={set('fee_type')}><option value="mensual">al mes</option><option value="trimestral">al trimestre</option><option value="unico">único</option></select></span></label>
         <label className="f">Objetivo<input id="d-obj" value={f.objective || ''} onChange={set('objective')} placeholder="Ej. Sprint 10 m < 1,80 s antes del 15/01" /></label>
@@ -678,4 +679,14 @@ function KindPick({ value, onChange }) {
       ))}
     </div>
   );
+}
+
+// Copia el enlace personal para mandarlo por donde quieras
+function CopyInvite({ p }) {
+  const toast = useToast();
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(inviteLink(p)); toast('Enlace copiado. Pégalo en WhatsApp.'); }
+    catch { window.prompt('Copia el enlace:', inviteLink(p)); }
+  };
+  return <button type="button" className="btn" onClick={copy}>Copiar enlace de acceso</button>;
 }

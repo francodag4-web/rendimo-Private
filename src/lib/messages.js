@@ -6,13 +6,14 @@ export const MESSAGES = {
   invitar: {
     label: 'Enviar acceso a la app',
     list: [
-      'Buenas {nombre}! Ya tienes tu acceso a {coach}. Entra en {web} con este correo: {email}. Te llega un enlace al mail y listo, ahí vas a ver tus entrenos de cada día y el check-in. Cualquier cosa me dices',
-      'Hola {nombre}, todo listo para empezar. Entra en {web} con {email} y te llegará un enlace para acceder. Te recomiendo añadirla a la pantalla de inicio del móvil, así la tienes como una app más',
-      '{nombre}, ya tienes tu alta hecha! Abre {web}, pon tu correo ({email}) y pulsa el enlace que te llega. Lo primero que vas a ver es el check-in: son 20 segundos y me ayudan un montón a ajustarte las sesiones',
-      'Qué tal {nombre}? Te paso el acceso a la app: {web} con tu correo {email}. Échale un ojo cuando puedas y si algo no te cuadra me escribes y lo vemos',
-      'Hola {nombre}! Te doy la bienvenida a {coach}. Tu acceso: {web} con el correo {email}. A partir de ahora todo el plan, los vídeos y tu progreso los tienes ahí. Vamos a por ello',
+      'Buenas {nombre}! Ya tienes tu acceso a {coach}. Entra desde aquí: {enlace} Pon tu correo, te llega un enlace al mail y listo. Ahí vas a ver tus entrenos de cada día y el check-in. Cualquier cosa me dices',
+      'Hola {nombre}, todo listo para empezar. Este es tu enlace para darte de alta en la app: {enlace} Solo tienes que poner tu correo y pulsar el enlace que te llega. Te recomiendo añadirla a la pantalla de inicio del móvil, así la tienes como una app más',
+      '{nombre}, ya tienes tu alta hecha! Abre este enlace: {enlace} pon tu correo y pulsa el enlace que te llega. Lo primero que vas a ver es el check-in: son 20 segundos y me ayudan un montón a ajustarte las sesiones',
+      'Qué tal {nombre}? Te paso tu acceso a la app: {enlace} Entras con tu correo y ya lo tienes. Échale un ojo cuando puedas y si algo no te cuadra me escribes y lo vemos',
+      'Hola {nombre}! Te doy la bienvenida a {coach}. Regístrate desde aquí con tu correo: {enlace} A partir de ahora todo el plan, los vídeos y tu progreso los tienes ahí. Vamos a por ello',
     ],
   },
+
   checkin: {
     label: 'Recordar el check-in',
     list: [

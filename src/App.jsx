@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { supabase, q, PLATFORM } from './lib/supabase.js';
-import Login from './Login.jsx';
+import Login, { getInvite, setInvite } from './Login.jsx';
 import CoachApp from './coach/CoachApp.jsx';
 import PlayerApp from './player/PlayerApp.jsx';
 import Consent from './player/Consent.jsx';
@@ -20,6 +20,12 @@ export default function App() {
   // Formulario público de solicitudes: #/s/<dirección del entrenador>
   const pub = window.location.hash.match(/^#\/s\/([a-z0-9-]+)/i);
   if (pub) return <PublicLead slug={pub[1].toLowerCase()} />;
+  // Enlace de invitación: #/unirse/<código>. Se guarda y se usa al entrar.
+  const inv = window.location.hash.match(/^#\/unirse\/([a-f0-9]{16,64})/i);
+  if (inv) {
+    try { localStorage.setItem('invite', inv[1].toLowerCase()); } catch {}
+    window.history.replaceState(null, '', window.location.pathname + '#/');
+  }
   return <Private />;
 }
 
@@ -39,7 +45,16 @@ function Private() {
   const loadAccess = useCallback(async () => {
     setError('');
     try {
-      const a = await q(supabase.rpc('claim_access'));
+      const invite = getInvite();
+      let a = await q(supabase.rpc('claim_access'));
+      // La invitación solo se usa si esta cuenta aún no es entrenador ni cliente
+      if (invite) {
+        if (!a.coach && !a.player) {
+          const r = await supabase.rpc('claim_access', { invite });
+          if (!r.error) a = r.data;
+        }
+        setInvite(null);
+      }
       let p = null;
       if (a.player) {
         const rows = await q(supabase.from('players').select('*').eq('user_id', session.user.id));

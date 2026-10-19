@@ -67,7 +67,7 @@ function NewLead({ onDone }) {
         <label className="f">Nombre<input id="ld-name" required value={f.name} onChange={set('name')} /></label>
         <label className="f">WhatsApp<input id="ld-phone" inputMode="tel" value={f.phone} onChange={set('phone')} placeholder="34600111222" /></label>
         <label className="f">Correo<input type="email" value={f.email} onChange={set('email')} /></label>
-        <label className="f">Posición<input value={f.position} onChange={set('position')} /></label>
+        <label className="f">Posición o deporte<input value={f.position} onChange={set('position')} /></label>
         <label className="f">Plan que le interesa<select value={f.plan} onChange={set('plan')}>{planOptions().map((p) => <option key={p}>{p}</option>)}</select></label>
         <label className="f">Objetivo<input value={f.goal} onChange={set('goal')} /></label>
       </div>
@@ -89,16 +89,15 @@ function LeadCard({ l }) {
   const intro = fill(pick(stage >= 1 && !l.call_at ? 'solicitud_seguimiento' : 'solicitud', l.id), { nombre: first, coach: coach.brand_short || coach.brand_name, plan: l.plan && l.plan !== 'Aún no lo sé' ? ` para ${l.plan}` : '' });
   const convert = () => act(async () => {
     const mail = email.trim().toLowerCase();
-    if (!mail) throw new Error('Pon su correo: es con el que entrará en la app.');
     const d = planDefaults(l.plan);
     const today = iso();
     const row = await q(supabase.from('players').insert({
-      coach_id: uid, name: l.name, email: mail, phone: l.phone, position: l.position, objective: l.goal, start_date: today,
+      coach_id: uid, name: l.name, email: mail || null, phone: l.phone, position: l.position, objective: l.goal, start_date: today,
       ...planPatch(l.plan || defaultPlan().name), next_review: d?.review === null ? null : iso(addDays(parseISO(today), d?.review || 14)),
     }).select().single());
     const txt = [l.goal && `Objetivo: ${l.goal}`, l.injuries && `Lesiones: ${l.injuries}`, l.message && `Mensaje: ${l.message}`].filter(Boolean).join(' · ');
     await q(supabase.from('evolution').insert({ coach_id: uid, player_id: row.id, category: 'valor', text: `Alta desde solicitud.${txt ? ' ' + txt : ''}` }));
-    await q(supabase.from('leads').update({ status: 'convertida', stage: 4, player_id: row.id, email: mail }).eq('id', l.id));
+    await q(supabase.from('leads').update({ status: 'convertida', stage: 4, player_id: row.id, email: mail || null }).eq('id', l.id));
     await load(['players', 'leads', 'evolution']);
     go('clientes', row.id);
   }, 'Cliente creado. Envíale el acceso por WhatsApp desde su ficha.');
@@ -118,7 +117,7 @@ function LeadCard({ l }) {
       <dl>
         {l.phone && <><dt>Teléfono</dt><dd>{l.phone}</dd></>}
         {l.email && <><dt>Correo</dt><dd style={{ wordBreak: 'break-all' }}>{l.email}</dd></>}
-        <dt>Posición</dt><dd>{l.position || '—'}</dd>
+        <dt>Posición o deporte</dt><dd>{l.position || '—'}</dd>
         <dt>Plan</dt><dd>{l.plan || '—'}</dd>
         <dt>Objetivo</dt><dd>{l.goal || '—'}</dd>
         <dt>Lesiones</dt><dd>{l.injuries || '—'}</dd>
@@ -129,7 +128,7 @@ function LeadCard({ l }) {
           {l.phone && <a className="btn" target="_blank" rel="noopener" href={waURL(l.phone, intro)} onClick={() => !stage && upd({ stage: 1 })}><WAIcon /> Escribir por WhatsApp</a>}
           <label className="f" style={{ color: '#fff' }}>Videollamada<input aria-label="Fecha de la videollamada" type="datetime-local" value={toLocal(l.call_at)} onChange={(e) => upd({ call_at: e.target.value ? new Date(e.target.value).toISOString() : null, stage: e.target.value ? Math.max(stage, 2) : stage }, e.target.value ? 'Videollamada agendada.' : null)} /></label>
           <label className="f" style={{ color: '#fff' }}>Estado<select aria-label="Estado" value={Math.min(stage, 3)} onChange={(e) => upd({ stage: Number(e.target.value) })}>{LEAD_STAGES.map((s, i) => <option key={s} value={i}>{s}</option>)}</select></label>
-          {stage >= 3 && !l.email && <label className="f" style={{ color: '#fff' }}>Correo para su acceso<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></label>}
+          {stage >= 3 && !l.email && <label className="f" style={{ color: '#fff' }}>Correo para su acceso (opcional)<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></label>}
           <button className="btn pri" disabled={stage < 3} onClick={convert} title={stage < 3 ? 'Primero marca la videollamada como hecha' : ''}>Crear cliente e invitar</button>
           {discard ? (
             <div className="row">

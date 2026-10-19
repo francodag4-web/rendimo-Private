@@ -143,7 +143,7 @@ function Account({ ctx, session, onLogout, canSwitch, onSwitch }) {
         <dl className="kv">
           <dt>Nombre</dt><dd>{player.name}</dd>
           <dt>Correo</dt><dd>{player.email}</dd>
-          {player.position && <><dt>{player.kind === 'personal' ? 'Deporte' : 'Posición'}</dt><dd>{player.position}</dd></>}
+          {player.position && <><dt>Posición o deporte</dt><dd>{player.position}</dd></>}
           {player.plan && <><dt>Plan</dt><dd>{player.plan}</dd></>}
           {payState(ctx) && <><dt>Pago</dt><dd><span className={'pill ' + (payState(ctx).paid ? 'ok' : 'bad')}>{payState(ctx).text}</span></dd></>}
           <dt>Con {coachName} desde</dt><dd>{fmtDate(player.start_date)}</dd>

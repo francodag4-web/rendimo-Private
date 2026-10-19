@@ -652,3 +652,55 @@ alter table public.players add column if not exists kind text not null default '
 alter table public.players drop constraint if exists players_kind_check;
 alter table public.players add constraint players_kind_check check (kind in ('equipo','personal'));
 grant insert (kind), update (kind) on public.players to authenticated;
+
+-- 13 · Invitar sin correo: enlace personal por WhatsApp; el cliente se registra con su correo
+alter table public.players alter column email drop not null;
+alter table public.players add column if not exists invite_code text unique
+  default replace(gen_random_uuid()::text, '-', '');
+update public.players set invite_code = replace(gen_random_uuid()::text, '-', '') where invite_code is null;
+
+-- Datos mínimos para la pantalla de bienvenida del enlace (sin sesión)
+create or replace function public.public_invite(code text) returns jsonb
+language sql stable security definer set search_path = '' as $$
+  select jsonb_build_object('name', split_part(p.name, ' ', 1), 'brand_name', c.brand_name,
+    'color', c.color, 'logo', c.logo, 'used', p.user_id is not null)
+    from public.players p join public.coaches c on c.id = p.coach_id
+   where p.invite_code = code and p.end_date is null limit 1;
+$$;
+grant execute on function public.public_invite(text) to anon, authenticated;
+
+-- Al entrar: vincula por correo (como antes) o por el código del enlace de invitación
+drop function if exists public.claim_access();
+create or replace function public.claim_access(invite text default null) returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare
+  uid uuid := auth.uid();
+  mail text := lower(coalesce(auth.jwt() ->> 'email', ''));
+  code text := coalesce(nullif(invite, ''), auth.jwt() -> 'user_metadata' ->> 'invite');
+  is_c boolean;
+  is_p boolean;
+begin
+  if uid is null or mail = '' then
+    return jsonb_build_object('coach', false, 'player', false);
+  end if;
+  if exists (select 1 from public.coach_allowlist where email = mail) then
+    insert into public.coaches (id, email) values (uid, mail) on conflict (id) do nothing;
+  end if;
+  update public.players set user_id = uid
+   where email = mail and user_id is null;
+  -- Un entrenador o alguien que ya es cliente no puede quedarse una invitación ajena por tener la sesión abierta
+  if code is not null and not exists (select 1 from public.coaches where id = uid)
+     and not exists (select 1 from public.players where user_id = uid) then
+    begin
+      update public.players set user_id = uid, email = mail
+       where invite_code = code and user_id is null;
+    exception when unique_violation then
+      update public.players set user_id = uid
+       where invite_code = code and user_id is null;
+    end;
+  end if;
+  select exists (select 1 from public.coaches where id = uid) into is_c;
+  select exists (select 1 from public.players where user_id = uid) into is_p;
+  return jsonb_build_object('coach', is_c, 'player', is_p);
+end $$;
+grant execute on function public.claim_access(text) to authenticated;
