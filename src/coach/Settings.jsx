@@ -4,6 +4,7 @@ import { supabase, q } from '../lib/supabase.js';
 import { fileToDataURL } from '../lib/util.js';
 import { applyBrand } from '../App.jsx';
 import { useAction } from '../ui/ui.jsx';
+import { MESSAGES } from '../lib/messages.js';
 
 export default function Settings() {
   const { coach, load } = useCoach();
@@ -64,6 +65,18 @@ export default function Settings() {
           </form>
         </div>
       </div>
+      <details className="panel">
+        <summary style={{ cursor: 'pointer' }}><b>Mensajes de WhatsApp</b> <span className="muted small">· {Object.values(MESSAGES).reduce((a, m) => a + m.list.length, 0)} mensajes en {Object.keys(MESSAGES).length} situaciones; la app va alternando versiones</span></summary>
+        <div className="stack" style={{ marginTop: 12 }}>
+          {Object.entries(MESSAGES).filter(([k]) => k !== 'libre').map(([k, m]) => (
+            <div key={k} className="stack" style={{ gap: 6 }}>
+              <h4>{m.label}</h4>
+              <ol className="small" style={{ margin: 0, paddingLeft: 20, display: 'grid', gap: 4 }}>{m.list.map((t, i) => <li key={i}>{t}</li>)}</ol>
+            </div>
+          ))}
+          <p className="muted small">Entre llaves van los datos que se rellenan solos: {'{nombre}'}, {'{mes}'}, {'{importe}'}… Sin emojis a propósito: WhatsApp los pierde al abrir el mensaje desde un enlace.</p>
+        </div>
+      </details>
     </>
   );
 }

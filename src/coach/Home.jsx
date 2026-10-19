@@ -2,25 +2,18 @@ import React, { useState } from 'react';
 import { useCoach } from './CoachApp.jsx';
 import { waURL, iso, addDays, fmtDate, wellness, daysBetween, parseISO, MONTHS } from '../lib/util.js';
 import { WAIcon, Empty, Tabs, useAction } from '../ui/ui.jsx';
+import { pick, fill } from '../lib/messages.js';
 import { supabase, q } from '../lib/supabase.js';
 import { calendarWeekIdx, totalWeeks, sessionsOfWeek } from '../lib/program.js';
 import { reviewInfo, isRecord, testValue, fmtNum, monthKey, monthName, feeText, commitment, PLANS } from '../lib/domain.js';
 import Flag from './Flag.jsx';
 
-export const waText = (p, kind, coach, extra = '') => {
-  const f = p.name.split(' ')[0];
-  return {
-    checkin: `Hola ${f}, llevas unos días sin hacer el check-in o con el bienestar bajo. ¿Cómo estás? Son 20 segundos y me ayudan a ajustar tu entrenamiento.`,
-    dolor: `Hola ${f}, he visto que marcaste dolor. ¿Cómo lo notas hoy? Antes de entrenar lo hablamos y ajustamos la sesión.`,
-    carga: `Hola ${f}, la semana pasada subió bastante tu carga. ¿Cómo te encuentras? Si notas fatiga, lo ajustamos.`,
-    revision: `Hola ${f}, toca revisión. ¿Me cuentas sensaciones, cargas y si has tenido alguna molestia? Con eso te ajusto el plan.`,
-    marca: `¡Enhorabuena ${f}! Nueva marca${extra ? `: ${extra}` : ''}. El trabajo se está notando. Seguimos.`,
-    pago: `Hola ${f}, te recuerdo el pago de ${extra || 'este mes'} (${feeText(p)}). Cuando lo hagas, avísame y lo marco. ¡Gracias!`,
-    renov: `Hola ${f}, en unos días terminas el compromiso de ${p.commitment_months || 3} meses. ¿Hablamos de cómo seguir y de tus próximos objetivos?`,
-    invitar: `Hola ${f}, ya tienes tu acceso a ${coach?.brand_name || 'la app'}. Entra en ${window.location.origin} con este correo: ${p.email}. Te llegará un enlace para acceder. Ahí verás tu entrenamiento de cada día y harás el check-in.`,
-    libre: `Hola ${f}, `,
-  }[kind];
-};
+// Mensajes de WhatsApp: varias versiones por situación (ver lib/messages.js)
+export const waVars = (p, coach, extra = '') => ({
+  nombre: (p.name || '').split(' ')[0], coach: coach?.brand_short || coach?.brand_name || '', web: window.location.origin, email: p.email,
+  mes: extra, marca: extra, dolor: extra, importe: feeText(p), meses: p.commitment_months || 3, plan: '',
+});
+export const waText = (p, kind, coach, extra = '', offset = 0) => fill(pick(kind, (p.id || p.name) + kind, offset), waVars(p, coach, extra));
 
 const Lnk = ({ onClick, children }) => <button type="button" className="lnk" onClick={onClick}>{children}</button>;
 
@@ -128,7 +121,7 @@ export default function Home() {
           <h3>Nuevas marcas</h3>
           {records.length ? (
             <ul>{records.map((t) => { const p = pname(t.player_id); return (
-              <li key={t.id}><span><b>{p?.name.split(' ')[0]}</b> · {t.test}</span><b className="num">{fmtNum(testValue(t))} {t.unit}</b></li>
+              <li key={t.id}><span><b>{p?.name.split(' ')[0]}</b> · {t.test}</span><span className="row"><b className="num">{fmtNum(testValue(t))} {t.unit}</b>{p?.phone && <a className="wa" target="_blank" rel="noopener" aria-label={`Felicitar a ${p.name}`} href={waURL(p.phone, waText(p, 'marca', coach, `${t.test} ${fmtNum(testValue(t))} ${t.unit || ''}`.trim()))}><WAIcon /></a>}</span></li>
             ); })}</ul>
           ) : <div className="sub">Aparecen cuando un jugador supera su mejor registro en un test (últimos 14 días).</div>}
         </section>
@@ -136,7 +129,7 @@ export default function Home() {
         <section className="tile t-t" aria-label="Hoy">
           <h3>Hoy en {coach.brand_short || coach.brand_name}</h3>
           <div className="big num">{doneToday}<small>/{base.length}</small></div>
-          <div className="sub">{scheduled.length ? 'con sesión hoy han registrado' : 'han registrado sesión hoy'}{gaps[0] ? <> · <Lnk onClick={() => go('clientes', gaps[0].p.id)}>{gaps[0].p.name.split(' ')[0]}</Lnk> lleva {gaps[0].days} días sin registrar</> : ''}</div>
+          <div className="sub">{scheduled.length ? 'con sesión hoy han registrado' : 'han registrado sesión hoy'}{gaps[0] ? <> · <Lnk onClick={() => go('clientes', gaps[0].p.id)}>{gaps[0].p.name.split(' ')[0]}</Lnk> lleva {gaps[0].days} días sin registrar{gaps[0].p.phone && <> <a className="wa" target="_blank" rel="noopener" aria-label={`Escribir a ${gaps[0].p.name}`} href={waURL(gaps[0].p.phone, waText(gaps[0].p, 'sesiones', coach))}><WAIcon /></a></>}</> : ''}</div>
         </section>
 
         <section className="tile t-b" aria-label="Pagos del mes">
@@ -179,7 +172,7 @@ export default function Home() {
 }
 
 const KIND = { dolor: 'Dolor', bienestar: 'Bienestar', checkin: 'Sin check-in', renov: 'Renovación', carga: 'Carga' };
-const WA_KIND = { dolor: 'dolor', bienestar: 'checkin', checkin: 'checkin', renov: 'renov', carga: 'carga' };
+const WA_KIND = { dolor: 'dolor', bienestar: 'bienestar', checkin: 'checkin', renov: 'renov', carga: 'carga' };
 
 function Alerts() {
   const { alerts } = useCoach();
@@ -248,7 +241,7 @@ function AlertRow({ a }) {
           {a.status !== 'gestionada' && <button className="btn sm" onClick={() => setForm('pendiente')}>{a.status === 'pendiente' ? 'Cambiar fecha' : 'Dejar pendiente'}</button>}
           {a.status !== 'gestionada' && <button className="btn sm s-ok" onClick={() => setForm('gestionada')}>✓ Gestionada</button>}
           {a.status !== 'nueva' && <button className="btn sm" onClick={reopen}>Reabrir</button>}
-          {a.p.phone && <a className="wa" target="_blank" rel="noopener" href={waURL(a.p.phone, waText(a.p, WA_KIND[a.kind] || 'libre', coach))}><WAIcon /> Escribir</a>}
+          {a.p.phone && <a className="wa" target="_blank" rel="noopener" href={waURL(a.p.phone, waText(a.p, WA_KIND[a.kind] || 'libre', coach, a.kind === 'dolor' ? a.txt.replace(/^dolor /, '') : ''))}><WAIcon /> Escribir</a>}
         </div>
       )}
     </li>

@@ -4,7 +4,7 @@ import { supabase, q } from '../lib/supabase.js';
 import { iso, addDays, parseISO, waURL } from '../lib/util.js';
 import { useAction, useToast, Tabs, Empty, WAIcon } from '../ui/ui.jsx';
 import { LEAD_STAGES, DISCARD_REASONS, ago, planOptions, planDefaults, planPatch, PLANS, defaultPlan } from '../lib/domain.js';
-import { waText } from './Home.jsx';
+import { pick, fill } from '../lib/messages.js';
 
 const toLocal = (ts) => { if (!ts) return ''; const d = new Date(ts); const z = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}T${z(d.getHours())}:${z(d.getMinutes())}`; };
 
@@ -86,7 +86,7 @@ function LeadCard({ l }) {
   const upd = (patch, msg) => act(async () => { await q(supabase.from('leads').update(patch).eq('id', l.id)); await load('leads'); }, msg);
   const stage = l.stage || 0;
   const first = l.name.split(' ')[0];
-  const intro = `Hola ${first}, soy ${coach.brand_short || coach.brand_name}. He visto tu solicitud${l.plan ? ` para ${l.plan}` : ''}. ¿Te viene bien una videollamada de 15 minutos para conocerte y ver tu caso?`;
+  const intro = fill(pick(stage >= 1 && !l.call_at ? 'solicitud_seguimiento' : 'solicitud', l.id), { nombre: first, coach: coach.brand_short || coach.brand_name, plan: l.plan && l.plan !== 'Aún no lo sé' ? ` para ${l.plan}` : '' });
   const convert = () => act(async () => {
     const mail = email.trim().toLowerCase();
     if (!mail) throw new Error('Pon su correo: es con el que entrará en la app.');

@@ -4,6 +4,7 @@ import { supabase, q } from '../lib/supabase.js';
 import { matches, iso, fmtDate, waURL, monthsActive, wellness, addDays, mondayOf, parseISO } from '../lib/util.js';
 import { useAction, useToast, Tabs, Empty, Bars, Line, WAIcon } from '../ui/ui.jsx';
 import { waText } from './Home.jsx';
+import { MESSAGES, variants } from '../lib/messages.js';
 import { calendarWeekIdx, totalWeeks } from '../lib/program.js';
 import {
   PLANS, defaultPlan, planOptions, planDefaults, feeText, commitment, reviewInfo, REVIEW_OPTIONS, SCREENING, wellLevel, monthKey,
@@ -133,14 +134,14 @@ function NewPlayer() {
   );
 }
 
-const TEMPLATES = [['revision', 'Revisión'], ['checkin', 'Recordar check-in'], ['marca', 'Felicitar marca'], ['pago', 'Recordar pago'], ['renov', 'Renovación'], ['libre', 'Mensaje libre']];
+const TEMPLATES = ['revision', 'checkin', 'bienestar', 'dolor', 'carga', 'sesiones', 'partido', 'marca', 'pago', 'renov', 'libre'].map((k) => [k, MESSAGES[k].label]);
 
 function PlayerDetail({ id }) {
   const { players, go, coach, load, uid } = useCoach();
   const act = useAction();
   const p = players.find((x) => x.id === id);
   const [tab, setTab] = useState('resumen');
-  const [tpl, setTpl] = useState('revision');
+  const [waOpen, setWaOpen] = useState(false);
   if (!p) return <Empty>No se encuentra este jugador. <button className="btn sm" onClick={() => go('clientes')}>Volver</button></Empty>;
   const upd = (patch, msg) => act(async () => { await q(supabase.from('players').update(patch).eq('id', p.id)); await load('players'); }, msg);
   const scr = SCREENING.find((s) => s[0] === (p.screening || 'pendiente')) || SCREENING[0];
@@ -152,7 +153,6 @@ function PlayerDetail({ id }) {
     await load(['players', 'evolution']);
     return next;
   }, 'Revisión hecha. La siguiente queda programada.');
-  const kind = p.user_id ? tpl : 'invitar';
   return (
     <>
       <button className="btn ghost sm" style={{ justifySelf: 'start' }} onClick={() => go('clientes')}>← Todos los jugadores</button>
@@ -167,16 +167,10 @@ function PlayerDetail({ id }) {
             <select aria-label="Cribado" value={scr[0]} onChange={(e) => upd({ screening: e.target.value }, 'Cribado actualizado.')}
               style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', width: '100%' }}>{SCREENING.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
           </label>
-          {p.phone && (
-            <span className="row">
-              {p.user_id && <select aria-label="Plantilla de WhatsApp" style={{ width: 'auto' }} value={tpl} onChange={(e) => setTpl(e.target.value)}>{TEMPLATES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>}
-              <a className="btn pri" target="_blank" rel="noopener" href={waURL(p.phone, waText(p, kind, coach, kind === 'pago' ? new Date().toLocaleDateString('es-ES', { month: 'long' }) : ''))}>
-                <WAIcon /> {p.user_id ? 'WhatsApp' : 'Enviar acceso'}
-              </a>
-            </span>
-          )}
+          {p.phone && <button type="button" className="btn pri" aria-expanded={waOpen} onClick={() => setWaOpen(!waOpen)}><WAIcon /> {p.user_id ? 'WhatsApp' : 'Enviar acceso'}</button>}
         </div>
       </div>
+      {waOpen && p.phone && <WaComposer p={p} kinds={p.user_id ? TEMPLATES : [['invitar', MESSAGES.invitar.label]]} />}
       <div className="row">
         <select aria-label="Frecuencia de revisión" style={{ width: 'auto' }} value={p.review_days || 14} onChange={(e) => upd({ review_days: Number(e.target.value) }, 'Frecuencia de revisión guardada.')}>
           {[...new Set([...REVIEW_OPTIONS.map((o) => o[0]), p.review_days || 14])].map((d) => <option key={d} value={d}>{REVIEW_OPTIONS.find((o) => o[0] === d)?.[1] || `Revisión cada ${d} días`}</option>)}
@@ -570,5 +564,30 @@ function Data({ p }) {
       </div>
       <p className="muted small">Para una baja normal pon la fecha de baja y el motivo: así se conserva el historial y se calcula la permanencia media. Eliminar borra todo (derecho de supresión del RGPD).</p>
     </form>
+  );
+}
+
+// Redactor de WhatsApp: elige la situación, cambia de versión y retoca el texto antes de enviarlo
+function WaComposer({ p, kinds }) {
+  const { coach, tests = [], checkins } = useCoach();
+  const [kind, setKind] = useState(kinds[0][0]);
+  const [off, setOff] = useState(0);
+  const extraFor = (k) => {
+    if (k === 'pago') return new Date().toLocaleDateString('es-ES', { month: 'long' });
+    if (k === 'marca') { const t = [...tests].filter((x) => x.player_id === p.id).pop(); return t ? `${t.test} ${fmtNum(testValue(t))} ${t.unit || ''}`.trim() : ''; }
+    if (k === 'dolor') { const c = lastCheckin(checkins, p.id); return c?.pain ? `${c.pain}/10` : ''; }
+    return '';
+  };
+  const [text, setText] = useState(() => waText(p, kind, coach, extraFor(kind), 0));
+  const regen = (k, o) => { setKind(k); setOff(o); setText(waText(p, k, coach, extraFor(k), o)); };
+  return (
+    <div className="panel stack wacomp">
+      <div className="row">
+        {kinds.length > 1 && <select aria-label="Tipo de mensaje" style={{ width: 'auto' }} value={kind} onChange={(e) => regen(e.target.value, 0)}>{kinds.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>}
+        {variants(kind) > 1 && <button type="button" className="btn sm" onClick={() => regen(kind, off + 1)}>↻ Otra versión ({(off % variants(kind)) + 1}/{variants(kind)})</button>}
+      </div>
+      <textarea aria-label="Mensaje de WhatsApp" rows={3} value={text} onChange={(e) => setText(e.target.value)} />
+      <div className="row"><a className="btn pri" target="_blank" rel="noopener" href={waURL(p.phone, text)}><WAIcon /> Abrir en WhatsApp</a><span className="muted small">Puedes retocarlo antes de enviarlo.</span></div>
+    </div>
   );
 }
