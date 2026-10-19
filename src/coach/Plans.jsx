@@ -3,7 +3,7 @@ import { useCoach } from './CoachApp.jsx';
 import { supabase, q } from '../lib/supabase.js';
 import { iso, addDays, fmtDate } from '../lib/util.js';
 import { useAction, useToast, Empty } from '../ui/ui.jsx';
-import { PLANS, defaultPlan, planPatch, money, commitment, monthKey, fromRow, isLive, PLAN_COLORS, feeLabel } from '../lib/domain.js';
+import { PLANS, defaultPlan, planPatch, money, commitment, monthKey, fromRow, isLive, PLAN_COLORS, feeLabel, monthlyValue, payCover } from '../lib/domain.js';
 import Flag from './Flag.jsx';
 import PlanCard from '../ui/PlanCard.jsx';
 
@@ -94,7 +94,7 @@ function PlanForm({ row, offer, onDone }) {
       <div className="grid3">
         <label className="f">Nombre<input id="pf-name" required maxLength={60} value={f.name} onChange={set('name')} placeholder={f.is_offer ? 'Ej. Oferta verano 3 meses' : 'Ej. Online sin revisiones'} /></label>
         <label className="f">Precio (€)<input id="pf-fee" required inputMode="decimal" value={f.fee} onChange={set('fee')} /></label>
-        <label className="f">Pago<select value={f.fee_type} onChange={set('fee_type')}><option value="mensual">Al mes</option><option value="unico">Pago único</option></select></label>
+        <label className="f">Pago<select value={f.fee_type} onChange={set('fee_type')}><option value="mensual">Al mes</option><option value="trimestral">Al trimestre</option><option value="unico">Pago único</option></select></label>
         {f.is_offer && <label className="f">Precio normal (sale tachado)<input id="pf-old" inputMode="decimal" value={f.old_fee} onChange={set('old_fee')} placeholder="Ej. 89" /></label>}
         {f.is_offer && <label className="f">Válida hasta<input id="pf-until" type="date" value={f.valid_until} onChange={set('valid_until')} /></label>}
         <label className="f">Compromiso (meses)<input inputMode="numeric" value={f.commitment_months} onChange={set('commitment_months')} placeholder="vacío = sin compromiso" /></label>
@@ -124,7 +124,7 @@ export default function Plans() {
   const live = PLANS;
   const hidden = rows.filter((r) => !isLive(fromRow(r)));
   const other = active.filter((p) => !rows.some((x) => x.name === p.plan) && !live.some((x) => x.name === p.plan));
-  const monthly = active.filter((p) => p.fee != null && p.fee_type !== 'unico').reduce((a, p) => a + Number(p.fee), 0);
+  const monthly = active.reduce((a, p) => a + monthlyValue(p.fee, p.fee_type), 0);
   const noDb = !rows.length;
   const done = () => setForm(null);
   const del = (r) => act(async () => {
@@ -150,12 +150,12 @@ export default function Plans() {
         {live.map((pl) => {
           const row = rows.find((r) => r.id === pl.id);
           const list = active.filter((p) => p.plan === pl.name);
-          const paidNow = list.filter((p) => payments.some((x) => x.player_id === p.id && x.month === mk)).length;
-          const sum = list.reduce((a, p) => a + Number(p.fee ?? pl.fee), 0);
+          const paidNow = list.filter((p) => payCover(p, payments, mk).paid).length;
+          const sum = list.reduce((a, p) => a + monthlyValue(p.fee ?? pl.fee, p.fee_type || pl.type), 0);
           return (
             <PlanCard key={pl.name} plan={pl} you={false}>
               <div className="sub">{pl.review ? `Revisión cada ${pl.review === 7 ? 'semana' : `${pl.review} días`}` : 'Sin revisiones'}</div>
-              <div className="sub"><b>{list.length}</b> activo{list.length === 1 ? '' : 's'}{pl.type !== 'unico' && list.length ? ` · ${money(sum)}/mes · ${paidNow}/${list.length} pagado este mes` : ''}</div>
+              <div className="sub"><b>{list.length}</b> activo{list.length === 1 ? '' : 's'}{pl.type !== 'unico' && list.length ? ` · ${money(Math.round(sum))}/mes · ${paidNow}/${list.length} al día` : ''}</div>
               {list.length > 0 && (
                 <ul>{list.map((p) => (
                   <li key={p.id}>

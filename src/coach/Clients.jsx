@@ -9,7 +9,7 @@ import { calendarWeekIdx, totalWeeks } from '../lib/program.js';
 import {
   PLANS, defaultPlan, planOptions, planDefaults, feeText, commitment, reviewInfo, REVIEW_OPTIONS, SCREENING, wellLevel, monthKey,
   TEST_PRESETS, presetOf, fmtNum, testValue, asym, testSummary, severity, INJ_STATUS, SIDES, ZONES, zoneName,
-  FLAGS, EVO_CATS, evoLabel, isRecord,
+  FLAGS, EVO_CATS, evoLabel, isRecord, payCover,
 } from '../lib/domain.js';
 import Flag from './Flag.jsx';
 import { PlayerPrograms, Health, Notes } from './PlayerTabs.jsx';
@@ -43,8 +43,8 @@ function PlayerList() {
   const mk = monthKey();
   const payChip = (p) => {
     if (p.fee == null) return '—';
-    if (payments.some((x) => x.player_id === p.id && x.month === mk)) return <Chip level="ok">Pagado</Chip>;
-    if (p.fee_type === 'unico' && payments.some((x) => x.player_id === p.id)) return <span className="muted small">Pago único hecho</span>;
+    const c = payCover(p, payments, mk);
+    if (c.paid) return p.fee_type === 'unico' ? <span className="muted small">Pago único hecho</span> : <Chip level="ok">Pagado{p.fee_type === 'trimestral' ? ` · ${c.period}` : ''}</Chip>;
     return <Chip level="bad">Pendiente</Chip>;
   };
 
@@ -121,7 +121,7 @@ function NewPlayer() {
           <label className="f">WhatsApp (con prefijo, ej. 34600111222)<input id="np-phone" inputMode="tel" value={f.phone} onChange={set('phone')} /></label>
           <label className="f">Posición o deporte<input id="np-pos" value={f.position} onChange={set('position')} placeholder="Ej. Pilier, Ala…" /></label>
           <label className="f">Plan<select id="np-plan" value={f.plan} onChange={setPlan}>{planOptions().map((p) => <option key={p}>{p}</option>)}</select></label>
-          <label className="f">Importe (€)<span className="row"><input id="np-fee" inputMode="decimal" style={{ flex: 1 }} value={f.fee ?? ''} onChange={set('fee')} /><select style={{ width: 'auto' }} value={f.fee_type} onChange={set('fee_type')}><option value="mensual">al mes</option><option value="unico">único</option></select></span></label>
+          <label className="f">Importe (€)<span className="row"><input id="np-fee" inputMode="decimal" style={{ flex: 1 }} value={f.fee ?? ''} onChange={set('fee')} /><select style={{ width: 'auto' }} value={f.fee_type} onChange={set('fee_type')}><option value="mensual">al mes</option><option value="trimestral">al trimestre</option><option value="unico">único</option></select></span></label>
           <label className="f">Fecha de alta<input id="np-start" type="date" required value={f.start_date} onChange={set('start_date')} /></label>
           <label className="f">Compromiso (meses)<input inputMode="numeric" value={f.commitment_months} onChange={set('commitment_months')} /></label>
           <label className="f">Objetivo<input id="np-obj" value={f.objective} onChange={set('objective')} placeholder="Ej. Sprint 10 m < 1,80 s antes del 15/01" /></label>
@@ -539,7 +539,7 @@ function Data({ p }) {
         <label className="f">WhatsApp<input value={f.phone || ''} onChange={set('phone')} /></label>
         <label className="f">Posición<input value={f.position || ''} onChange={set('position')} /></label>
         <label className="f">Plan<select value={f.plan || ''} onChange={(e) => { const d = planDefaults(e.target.value); setF({ ...f, plan: e.target.value, ...(d ? { fee: d.fee, fee_type: d.type, commitment_months: d.commitment } : {}) }); }}>{planOptions(f.plan).map((x) => <option key={x}>{x}</option>)}</select></label>
-        <label className="f">Importe (€)<span className="row"><input id="d-fee" inputMode="decimal" style={{ flex: 1 }} value={f.fee ?? ''} onChange={set('fee')} /><select style={{ width: 'auto' }} value={f.fee_type || 'mensual'} onChange={set('fee_type')}><option value="mensual">al mes</option><option value="unico">único</option></select></span></label>
+        <label className="f">Importe (€)<span className="row"><input id="d-fee" inputMode="decimal" style={{ flex: 1 }} value={f.fee ?? ''} onChange={set('fee')} /><select style={{ width: 'auto' }} value={f.fee_type || 'mensual'} onChange={set('fee_type')}><option value="mensual">al mes</option><option value="trimestral">al trimestre</option><option value="unico">único</option></select></span></label>
         <label className="f">Objetivo<input id="d-obj" value={f.objective || ''} onChange={set('objective')} placeholder="Ej. Sprint 10 m < 1,80 s antes del 15/01" /></label>
         <label className="f">Club / partido<input id="d-club" value={f.club_days || ''} onChange={set('club_days')} placeholder="Ej. Mar y jue · domingo" /></label>
         <label className="f">Días extra conmigo<input value={f.extra_days || ''} onChange={set('extra_days')} placeholder="Ej. Lun, mié, vie · 60 min" /></label>

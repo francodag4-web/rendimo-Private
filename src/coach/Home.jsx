@@ -5,7 +5,7 @@ import { WAIcon, Empty, Tabs, useAction } from '../ui/ui.jsx';
 import { pick, fill } from '../lib/messages.js';
 import { supabase, q } from '../lib/supabase.js';
 import { calendarWeekIdx, totalWeeks, sessionsOfWeek } from '../lib/program.js';
-import { reviewInfo, isRecord, testValue, fmtNum, monthKey, monthName, feeText, commitment, PLANS } from '../lib/domain.js';
+import { reviewInfo, isRecord, testValue, fmtNum, monthKey, monthName, feeText, commitment, PLANS, payCover } from '../lib/domain.js';
 import Flag from './Flag.jsx';
 
 // Mensajes de WhatsApp: varias versiones por situación (ver lib/messages.js)
@@ -56,7 +56,7 @@ export default function Home() {
   // Pagos del mes
   const mk = monthKey();
   const payable = active.filter((p) => p.fee != null && (p.fee_type !== 'unico' || !payments.some((x) => x.player_id === p.id) || payments.some((x) => x.player_id === p.id && x.month === mk)));
-  const paid = payable.filter((p) => payments.some((x) => x.player_id === p.id && x.month === mk));
+  const paid = payable.filter((p) => (p.fee_type === 'trimestral' ? payCover(p, payments, mk).paid : payments.some((x) => x.player_id === p.id && x.month === mk)));
   const unpaid = payable.filter((p) => !paid.includes(p));
 
   // Próximos recordatorios (7 días; incluye lo atrasado)

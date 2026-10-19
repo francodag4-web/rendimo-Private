@@ -10,7 +10,7 @@ export default function PlanCard({ plan: p, badge, as: Tag = 'section', classNam
       <span className="between"><b className="pname">{p.name}</b>{(badge || p.offer || p.tag) && <span className="pill">{badge || (p.offer ? 'Oferta' : p.tag)}</span>}</span>
       <span className="price num">
         {p.oldFee != null && p.oldFee > p.fee && <s className="old">{p.oldFee} €</s>}
-        {p.fee} €<small>{p.type === 'unico' ? ' pago único' : ' / mes'}</small>
+        {p.fee} €<small>{p.type === 'unico' ? ' pago único' : p.type === 'trimestral' ? ' / trimestre' : ' / mes'}</small>
       </span>
       {p.until && <span className="until">Hasta el {fmtDate(p.until)}</span>}
       {p.pitch && <span className="sub">{p.pitch}</span>}

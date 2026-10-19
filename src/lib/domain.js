@@ -24,7 +24,28 @@ export const isLive = (p) => p.active !== false && (!p.until || p.until >= iso()
 export const setPlans = (rows) => { PLANS = rows?.length ? rows.map(fromRow).filter(isLive).sort((a, b) => a.sort - b.sort || a.fee - b.fee) : DEFAULT_PLANS; return PLANS; };
 export const defaultPlan = () => PLANS.find((p) => p.name === 'Coaching rugby') || PLANS.find((p) => !p.offer) || PLANS[0];
 export const PLAN_COLORS = [['t-g', 'Verde'], ['t-r', 'Rojo'], ['t-a', 'Amarillo'], ['t-o', 'Naranja'], ['t-p', 'Morado'], ['t-b', 'Azul'], ['t-t', 'Turquesa'], ['t-s', 'Gris']];
-export const feeLabel = (p) => `${money(p.fee)}${p.type === 'unico' ? ' pago único' : '/mes'}`;
+export const FEE_TYPES = [['mensual', 'Al mes'], ['trimestral', 'Al trimestre'], ['unico', 'Pago único']];
+export const feeSuffix = (t) => (t === 'unico' ? ' pago único' : t === 'trimestral' ? '/trimestre' : '/mes');
+export const feeLabel = (p) => `${money(p.fee)}${feeSuffix(p.type)}`;
+// Lo que aporta al mes (el trimestral se reparte en 3; el pago único no es cuota)
+export const monthlyValue = (fee, type) => (fee == null ? 0 : type === 'unico' ? 0 : type === 'trimestral' ? Number(fee) / 3 : Number(fee));
+const MS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+const mIdx = (key) => Number(key.slice(0, 4)) * 12 + Number(key.slice(5, 7)) - 1;
+const mKey = (i) => `${Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, '0')}`;
+// Qué cubre el pago de un mes: mensual ese mes; trimestral el trimestre desde el mes de alta; único, cualquier pago
+export function payCover(p, payments = [], mk) {
+  const mine = payments.filter((x) => x.player_id === p.id);
+  if (p.fee_type === 'unico') { const r = mine[0] || null; return { row: r, paid: !!r, period: 'el pago único', months: [mk] }; }
+  if (p.fee_type === 'trimestral' && p.start_date) {
+    const s = mIdx(p.start_date.slice(0, 7)); const q = Math.floor((mIdx(mk) - s) / 3); const a = s + q * 3;
+    const months = [a, a + 1, a + 2].map(mKey);
+    const r = mine.find((x) => months.includes(x.month)) || null;
+    const name = (i) => MS[i % 12];
+    return { row: r, paid: !!r, period: `${name(a)}–${name(a + 2)}`, long: `${MONTH_NAMES[a % 12]} a ${MONTH_NAMES[(a + 2) % 12]}`, months, start: mKey(a) };
+  }
+  const r = mine.find((x) => x.month === mk) || null;
+  return { row: r, paid: !!r, period: MONTH_NAMES[Number(mk.slice(5, 7)) - 1], months: [mk] };
+}
 
 // Datos que cambian al pasar a un jugador a un plan
 export const planPatch = (plan, p = {}) => {
@@ -39,7 +60,7 @@ export const planOptions = (current) => [...new Set([...PLANS.map((p) => p.name)
 export const planDefaults = (name) => PLANS.find((p) => p.name === name) || null;
 
 export const money = (n) => (n == null || n === '' ? '—' : `${Number(n).toLocaleString('es-ES', { maximumFractionDigits: 2 })} €`);
-export const feeText = (p) => (p.fee == null ? '—' : `${money(p.fee)}${p.fee_type === 'unico' ? ' único' : '/mes'}`);
+export const feeText = (p) => (p.fee == null ? '—' : `${money(p.fee)}${p.fee_type === 'unico' ? ' único' : p.fee_type === 'trimestral' ? '/trimestre' : '/mes'}`);
 
 export const monthKey = (d = new Date()) => iso(d).slice(0, 7);
 export const MONTH_NAMES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];

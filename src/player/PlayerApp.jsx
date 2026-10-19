@@ -1,4 +1,4 @@
-import { testSummary, fmtNum, testValue, PLANS, money, commitment, wellLevel, setPlans, feeLabel } from '../lib/domain.js';
+import { testSummary, fmtNum, testValue, PLANS, money, commitment, wellLevel, setPlans, feeLabel, payCover, feeSuffix } from '../lib/domain.js';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase, q, PLATFORM, fetchAll } from '../lib/supabase.js';
 import { applyBrand } from '../App.jsx';
@@ -544,7 +544,7 @@ function Plans({ ctx }) {
   const pay = payState(ctx);
   return (
     <div className="stack">
-      <Hero color={pay?.paid === false ? 't-r' : 't-s'} kicker="Mi plan" title={player.plan || 'Sin plan todavía'} sub={player.plan ? `${player.fee != null ? money(player.fee) + (player.fee_type === 'unico' ? ' pago único' : '/mes') : ''}${player.commitment_months ? ` · ${com.text}` : ''}` : 'Elige cómo quieres trabajar.'}>
+      <Hero color={pay?.paid === false ? 't-r' : 't-s'} kicker="Mi plan" title={player.plan || 'Sin plan todavía'} sub={player.plan ? `${player.fee != null ? money(player.fee) + feeSuffix(player.fee_type) : ''}${player.commitment_months ? ` · ${com.text}` : ''}` : 'Elige cómo quieres trabajar.'}>
         {pay && <span className={'paychip ' + (pay.paid ? 'ok' : 'bad')}>{pay.text}</span>}
         {pay && !pay.paid && coach?.whatsapp && <a className="btn" target="_blank" rel="noopener" href={waURL(coach.whatsapp, `Hola, soy ${first}. Te escribo por el pago de ${pay.month}.`)}><WAIcon /> Hablar del pago</a>}
       </Hero>
@@ -570,6 +570,10 @@ function payState({ player, payments = [] }) {
   if (player.fee_type === 'unico') {
     const p = payments[0];
     return p ? { paid: true, month, text: '✓ Pago único hecho' } : { paid: false, month: 'tu programa', text: 'Pago pendiente' };
+  }
+  if (player.fee_type === 'trimestral') {
+    const c = payCover(player, payments.map((x) => ({ ...x, player_id: player.id })), mk);
+    return c.paid ? { paid: true, month: c.period, text: `✓ Trimestre ${c.period} pagado` } : { paid: false, month: c.long, text: `Pago del trimestre ${c.period} pendiente` };
   }
   return payments.some((x) => x.month === mk) ? { paid: true, month, text: `✓ ${month[0].toUpperCase() + month.slice(1)} pagado` } : { paid: false, month, text: `Pago de ${month} pendiente` };
 }

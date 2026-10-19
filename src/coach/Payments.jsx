@@ -3,7 +3,7 @@ import { useCoach } from './CoachApp.jsx';
 import { supabase, q } from '../lib/supabase.js';
 import { waURL, iso } from '../lib/util.js';
 import { useAction, useToast, Tabs, Empty, WAIcon } from '../ui/ui.jsx';
-import { monthKey, monthName, feeText, commitment, money } from '../lib/domain.js';
+import { monthKey, monthName, feeText, commitment, money, payCover } from '../lib/domain.js';
 import { waText } from './Home.jsx';
 import Flag from './Flag.jsx';
 import { AssignPlan } from './Plans.jsx';
@@ -19,19 +19,21 @@ export default function Payments() {
   const [y, m] = mk.split('-').map(Number);
   const monthEnd = iso(new Date(y, m, 0));
   const monthStart = `${mk}-01`;
-  const paidRow = (p) => payments.find((x) => x.player_id === p.id && x.month === mk);
+  // Trimestral: un pago en cualquier mes del trimestre lo cubre entero
+  const paidRow = (p) => (p.fee_type === 'trimestral' ? payCover(p, payments, mk).row : payments.find((x) => x.player_id === p.id && x.month === mk));
+  const period = (p) => (p.fee_type === 'trimestral' ? payCover(p, payments, mk).long : monthName(mk));
   // Activos ese mes con importe. Pago único: aparece hasta que se paga y en el mes en que se pagó.
   const rows = players.filter((p) => p.fee != null && p.start_date <= monthEnd && (!p.end_date || p.end_date >= monthStart))
     .filter((p) => p.fee_type !== 'unico' || paidRow(p) || !payments.some((x) => x.player_id === p.id));
   const paid = rows.filter(paidRow);
   const list = rows.filter((p) => view === 'todos' || (view === 'pagados' ? paidRow(p) : !paidRow(p)));
-  const total = paid.reduce((a, p) => a + Number(paidRow(p).amount || 0), 0);
+  const total = paid.reduce((a, p) => a + (paidRow(p).month === mk ? Number(paidRow(p).amount || 0) : 0), 0);
   const noFee = players.filter((p) => !p.end_date && p.fee == null);
 
   const mark = (p) => act(async () => {
     await q(supabase.from('payments').insert({ coach_id: uid, player_id: p.id, month: mk, amount: p.fee }));
     await load('payments');
-  }, `${p.name.split(' ')[0]}: ${monthName(mk)} pagado.`);
+  }, `${p.name.split(' ')[0]}: ${p.fee_type === 'trimestral' ? 'trimestre de ' : ''}${period(p)} pagado.`);
   const unmark = (p) => act(async () => {
     const r = paidRow(p);
     await q(supabase.from('payments').delete().eq('id', r.id));
@@ -42,7 +44,7 @@ export default function Payments() {
   return (
     <>
       <div className="pagehead">
-        <div><h1>Pagos</h1><p>Control manual: marca quién ha pagado cada mes.</p></div>
+        <div><h1>Pagos</h1><p>Control manual: marca quién ha pagado cada mes. El trimestral cubre 3 meses.</p></div>
         <span className={'chip ' + (paid.length === rows.length ? 'ok' : 'warn')}>{paid.length}/{rows.length} pagados · {money(total)}</span>
       </div>
       <div className="between">
@@ -65,8 +67,8 @@ export default function Payments() {
                   <td>{p.plan || '—'}</td>
                   <td className="num">{feeText(p)}</td>
                   <td>{commitment(p, new Date(y, m - 1, 15)).text}</td>
-                  <td>{r ? <button className="btn pri sm" aria-pressed="true" onClick={() => unmark(p)} title="Pulsa para desmarcar">Pagado</button> : <button className="btn sm" onClick={() => mark(p)}>Marcar pagado</button>}</td>
-                  <td>{!r && p.phone && <a className="wa" target="_blank" rel="noopener" href={waURL(p.phone, waText(p, 'pago', coach, monthName(mk)))}><WAIcon /> Recordar</a>}</td>
+                  <td>{r ? <button className="btn pri sm" aria-pressed="true" onClick={() => unmark(p)} title="Pulsa para desmarcar">{p.fee_type === 'trimestral' ? `Pagado · ${payCover(p, payments, mk).period}` : 'Pagado'}</button> : <button className="btn sm" onClick={() => mark(p)}>Marcar pagado</button>}</td>
+                  <td>{!r && p.phone && <a className="wa" target="_blank" rel="noopener" href={waURL(p.phone, waText(p, 'pago', coach, period(p)))}><WAIcon /> Recordar</a>}</td>
                 </tr>
               );
             })}</tbody>

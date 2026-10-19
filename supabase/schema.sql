@@ -640,3 +640,9 @@ from public.coaches c cross join (values
     array['Todo lo del coaching rugby','Revisión semanal','Criterios objetivos para volver al contacto','Coordinación con su fisio o médico si hace falta'], 'Plazas limitadas', 't-r', 3)
 ) as v(name, fee, fee_type, cm, rd, pitch, features, tag, color, sort)
 on conflict (coach_id, name) do nothing;
+
+
+-- ===== Pago trimestral (11-trimestral.sql) =====
+-- Rendimo · 11: permitir el pago trimestral en los planes
+alter table public.plans drop constraint if exists plans_fee_type_check;
+alter table public.plans add constraint plans_fee_type_check check (fee_type in ('mensual','trimestral','unico'));
