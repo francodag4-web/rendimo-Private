@@ -87,24 +87,45 @@ export function PasswordForm({ session }) {
 }
 
 // ---------- Borrar mi cuenta ----------
-export function DeleteAccount({ coach, onDone }) {
+export const DELETE_HOURS = 48;
+export const deleteDue = (at) => (at ? new Date(new Date(at).getTime() + DELETE_HOURS * 3600e3) : null);
+export const fmtDue = (d) => d.toLocaleString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+const notReady = (m) => /function|schema cache/i.test(m) ? 'El borrado aún no está activado en el servidor. Escribe a tu entrenador.' : m;
+
+// Entrenador: borra al momento. Cliente: lo solicita; su entrenador lo confirma o se borra solo a las 48 h.
+export function DeleteAccount({ coach, delAt, setDelAt }) {
   const act = useAction();
   const [txt, setTxt] = useState('');
   const ok = txt.trim().toUpperCase() === 'BORRAR';
-  const del = () => act(async () => {
+  const delNow = () => act(async () => {
     const { error } = await supabase.rpc('delete_my_account');
-    if (error) throw new Error(/function|schema cache/i.test(error.message) ? 'El borrado aún no está activado en el servidor. Escribe a tu entrenador.' : error.message);
+    if (error) throw new Error(notReady(error.message));
     try { localStorage.clear(); } catch {}
     await supabase.auth.signOut();
-    onDone?.();
   });
+  const request = () => act(async () => {
+    const { data, error } = await supabase.rpc('request_account_deletion');
+    if (error) throw new Error(notReady(error.message));
+    setDelAt?.(data); setTxt('');
+  }, 'Solicitud enviada. Tu entrenador la confirmará; si no, se borra sola en 48 horas.');
+  const cancel = () => act(async () => {
+    const { error } = await supabase.rpc('cancel_account_deletion');
+    if (error) throw new Error(notReady(error.message));
+    setDelAt?.(null);
+  }, 'Solicitud cancelada. Tu cuenta sigue como estaba.');
+  if (!coach && delAt) return (
+    <div className="stack" style={{ gap: 8 }}>
+      <p className="small"><b>Borrado solicitado.</b> Tu entrenador tiene que confirmarlo; si no lo hace, tu cuenta y todos tus datos se borran solos el <b>{fmtDue(deleteDue(delAt))}</b>.</p>
+      <div className="row"><button type="button" className="btn" onClick={cancel}>Cancelar solicitud</button></div>
+    </div>
+  );
   return (
     <div className="stack" style={{ gap: 8 }}>
       <p className="small">{coach
         ? 'Se borra tu cuenta de entrenador con tu marca, tus clientes, sus programas, registros y pagos. Tus clientes perderán el acceso. No se puede deshacer.'
-        : 'Se borran tu cuenta y todos tus datos: check-ins, sesiones, tests, lesiones y notas. Tu entrenador dejará de verlos. No se puede deshacer.'}</p>
+        : `Se borrarán tu cuenta y todos tus datos: check-ins, sesiones, tests, lesiones y notas. Tu entrenador lo confirmará; si no lo hace en ${DELETE_HOURS} horas, se borra igualmente. Hasta entonces puedes cancelarlo.`}</p>
       <label className="f">Escribe BORRAR para confirmar<input id="del-confirm" autoComplete="off" value={txt} onChange={(e) => setTxt(e.target.value)} /></label>
-      <div className="row"><button type="button" className="btn danger" disabled={!ok} onClick={del}>Borrar mi cuenta para siempre</button></div>
+      <div className="row"><button type="button" className="btn danger" disabled={!ok} onClick={coach ? delNow : request}>{coach ? 'Borrar mi cuenta para siempre' : 'Solicitar el borrado de mi cuenta'}</button></div>
     </div>
   );
 }

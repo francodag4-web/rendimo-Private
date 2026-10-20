@@ -16,6 +16,7 @@ import Flag from './Flag.jsx';
 import { PlayerPrograms, Health, Notes } from './PlayerTabs.jsx';
 import WeekNoteEditor from './WeekNote.jsx';
 import TestRadar from '../ui/TestRadar.jsx';
+import { DeletionBanner } from './Deletion.jsx';
 
 const END_REASONS = ['Objetivo cumplido', 'Precio', 'Falta de tiempo', 'Lesión', 'Se pasa a presencial', 'Sin respuesta', 'Otro'];
 
@@ -76,7 +77,7 @@ function PlayerList() {
                 return (
                   <tr key={p.id} className={sel.includes(p.id) ? 'on' : ''} style={{ cursor: 'pointer' }} onClick={() => go('clientes', p.id)}>
                     <td onClick={(e) => e.stopPropagation()}><input type="checkbox" aria-label={`Seleccionar ${p.name}`} checked={sel.includes(p.id)} onChange={() => toggle(p.id)} /></td>
-                    <td><b>{p.name}</b><Flag p={p} sm /></td>
+                    <td><b>{p.name}</b><Flag p={p} sm />{p.delete_requested_at && <span className="pill bad">Borrado solicitado</span>}</td>
                     <td>{p.position || (p.kind === 'personal' ? 'Entrenamiento personal' : '—')}</td>
                     <td>{p.plan || '—'}</td>
                     <td className="num">{fmtDate(p.start_date)}</td>
@@ -237,6 +238,7 @@ function PlayerDetail({ id }) {
           {p.phone && <button type="button" className="btn pri" aria-expanded={waOpen} onClick={() => setWaOpen(!waOpen)}><WAIcon /> {p.user_id ? 'WhatsApp' : 'Enviar acceso'}</button>}
         </div>
       </div>
+      <DeletionBanner p={p} />
       {waOpen && p.phone && <WaComposer p={p} kinds={p.user_id ? TEMPLATES : [['invitar', MESSAGES.invitar.label]]} />}
       <div className="row">
         <select aria-label="Frecuencia de revisión" style={{ width: 'auto' }} value={p.review_days || 14} onChange={(e) => upd({ review_days: Number(e.target.value) }, 'Frecuencia de revisión guardada.')}>

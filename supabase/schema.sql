@@ -721,3 +721,99 @@ end $$;
 revoke all on function public.delete_my_account() from public, anon;
 grant execute on function public.delete_my_account() to authenticated;
 
+
+-- 15 · Borrado de cuenta del cliente con confirmación del entrenador (48 h; si no confirma, se borra solo)
+alter table public.players add column if not exists delete_requested_at timestamptz;
+
+-- El cliente pide borrar su cuenta (o la recupera si cambia de idea)
+create or replace function public.request_account_deletion() returns timestamptz
+language plpgsql security definer set search_path = '' as $$
+declare t timestamptz;
+begin
+  if auth.uid() is null then raise exception 'Sin sesión'; end if;
+  update public.players set delete_requested_at = now() where user_id = auth.uid() and delete_requested_at is null;
+  select delete_requested_at into t from public.players where user_id = auth.uid() limit 1;
+  return t;
+end $$;
+create or replace function public.cancel_account_deletion() returns void
+language sql security definer set search_path = '' as $$
+  update public.players set delete_requested_at = null where user_id = auth.uid();
+$$;
+grant execute on function public.request_account_deletion() to authenticated;
+grant execute on function public.cancel_account_deletion() to authenticated;
+
+-- Borra una ficha y su acceso (si esa cuenta no es entrenador ni tiene otras fichas)
+create or replace function public.purge_player(pid uuid) returns void
+language plpgsql security definer set search_path = '' as $$
+declare u uuid;
+begin
+  select user_id into u from public.players where id = pid;
+  delete from public.players where id = pid;
+  if u is not null and not exists (select 1 from public.coaches where id = u)
+     and not exists (select 1 from public.players where user_id = u) then
+    delete from auth.users where id = u;
+  end if;
+end $$;
+revoke all on function public.purge_player(uuid) from public, anon, authenticated;
+
+-- El entrenador confirma (doble check)
+create or replace function public.confirm_client_deletion(pid uuid) returns void
+language plpgsql security definer set search_path = '' as $$
+begin
+  if not exists (select 1 from public.players where id = pid and coach_id = auth.uid() and delete_requested_at is not null) then
+    raise exception 'Este cliente no tiene una solicitud de borrado';
+  end if;
+  perform public.purge_player(pid);
+end $$;
+grant execute on function public.confirm_client_deletion(uuid) to authenticated;
+
+-- Pasadas 48 h sin confirmar: se borra igualmente
+create or replace function public.process_due_deletions() returns int
+language plpgsql security definer set search_path = '' as $$
+declare r record; n int := 0;
+begin
+  for r in select id from public.players where delete_requested_at < now() - interval '48 hours' loop
+    perform public.purge_player(r.id); n := n + 1;
+  end loop;
+  return n;
+end $$;
+revoke all on function public.process_due_deletions() from public, anon, authenticated;
+
+-- Cada hora (pg_cron) …
+create extension if not exists pg_cron with schema pg_catalog;
+select cron.schedule('rendimo-borrados-48h', '7 * * * *', 'select public.process_due_deletions()');
+
+-- … y también cada vez que alguien entra en la app (por si la tarea horaria no estuviera activa)
+create or replace function public.claim_access(invite text default null) returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare
+  uid uuid := auth.uid();
+  mail text := lower(coalesce(auth.jwt() ->> 'email', ''));
+  code text := coalesce(nullif(invite, ''), auth.jwt() -> 'user_metadata' ->> 'invite');
+  is_c boolean;
+  is_p boolean;
+begin
+  perform public.process_due_deletions();
+  if uid is null or mail = '' then
+    return jsonb_build_object('coach', false, 'player', false);
+  end if;
+  if exists (select 1 from public.coach_allowlist where email = mail) then
+    insert into public.coaches (id, email) values (uid, mail) on conflict (id) do nothing;
+  end if;
+  update public.players set user_id = uid
+   where email = mail and user_id is null;
+  if code is not null and not exists (select 1 from public.coaches where id = uid)
+     and not exists (select 1 from public.players where user_id = uid) then
+    begin
+      update public.players set user_id = uid, email = mail
+       where invite_code = code and user_id is null;
+    exception when unique_violation then
+      update public.players set user_id = uid
+       where invite_code = code and user_id is null;
+    end;
+  end if;
+  select exists (select 1 from public.coaches where id = uid) into is_c;
+  select exists (select 1 from public.players where user_id = uid) into is_p;
+  return jsonb_build_object('coach', is_c, 'player', is_p);
+end $$;
+

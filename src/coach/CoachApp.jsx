@@ -160,7 +160,7 @@ export default function CoachApp({ session, onLogout, canSwitch, onSwitch }) {
   const newLeads = (d.leads || []).filter((l) => l.status === 'activa' && !l.stage).length;
   const coach = d.coach;
   const Page = { inicio: Home, clientes: Clients, programacion: Programs, biblioteca: Library, agenda: Agenda, ajustes: Settings, solicitudes: Leads, pagos: Payments, planes: Plans, mas: CoachMenu }[route.page];
-  const badge = { inicio: openAlerts, agenda: due, solicitudes: newLeads };
+  const badge = { inicio: openAlerts + d.players.filter((p) => p.delete_requested_at).length, agenda: due, solicitudes: newLeads };
 
   const Brand = (
     <div className="brand">

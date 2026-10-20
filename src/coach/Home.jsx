@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { DeletionPanel } from './Deletion.jsx';
 import { useCoach } from './CoachApp.jsx';
 import { waURL, iso, addDays, fmtDate, wellness, daysBetween, parseISO, MONTHS } from '../lib/util.js';
 import { WAIcon, Empty, Tabs, useAction } from '../ui/ui.jsx';
@@ -89,6 +90,7 @@ export default function Home() {
         <button className="btn pri" onClick={() => go('clientes', 'nuevo')}>+ Nuevo cliente</button>
       </div>
 
+      <DeletionPanel />
       <div className="board">
         <section className="tile t-g" aria-label="Clientes activos">
           <h3>Clientes activos</h3>

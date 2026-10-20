@@ -71,9 +71,9 @@ function Privacy() {
       </ul>
       <p>Si alguno trata datos fuera del Espacio Económico Europeo, lo hace con las cláusulas contractuales tipo de la Comisión Europea o el Marco de Privacidad de Datos UE-EE. UU.</p>
       <h3>5. Cuánto tiempo</h3>
-      <p>Mientras tengas cuenta o tu entrenador mantenga tu ficha. Si borras tu cuenta desde Ajustes, se eliminan tu acceso y todos tus datos de forma inmediata e irreversible, salvo lo que la ley obligue a conservar.</p>
+      <p>Mientras tengas cuenta o tu entrenador mantenga tu ficha. Si pides borrar tu cuenta desde Ajustes, tu entrenador lo confirma y, si no lo hace, se borra automáticamente a las 48 horas. Hasta entonces puedes cancelarlo. Al borrarse se eliminan tu acceso y todos tus datos de forma irreversible, salvo lo que la ley obligue a conservar. Si eres entrenador, el borrado de tu cuenta es inmediato.</p>
       <h3>6. Tus derechos</h3>
-      <p>Puedes pedir acceso, rectificación, supresión, oposición, limitación y portabilidad de tus datos, y retirar tu consentimiento. Como cliente, pídeselo a tu entrenador; también puedes borrar tu cuenta tú mismo en Ajustes → Borrar mi cuenta. Para cualquier otra cuestión escribe a <F v={LEGAL.email} />. Si crees que no se respetan tus derechos, puedes reclamar ante la Agencia Española de Protección de Datos (aepd.es).</p>
+      <p>Puedes pedir acceso, rectificación, supresión, oposición, limitación y portabilidad de tus datos, y retirar tu consentimiento. Como cliente, pídeselo a tu entrenador; también puedes pedir el borrado de tu cuenta tú mismo en Ajustes → Borrar mi cuenta (se completa en un máximo de 48 horas). Para cualquier otra cuestión escribe a <F v={LEGAL.email} />. Si crees que no se respetan tus derechos, puedes reclamar ante la Agencia Española de Protección de Datos (aepd.es).</p>
       <h3>7. Menores</h3>
       <p>Los menores de 14 años necesitan el consentimiento de su madre, padre o tutor para usar la app (art. 7 LOPDGDD). El entrenador debe recabarlo antes de darlos de alta.</p>
       <h3>8. Seguridad</h3>
@@ -100,7 +100,7 @@ function Terms() {
       <h3>7. Disponibilidad y cambios</h3>
       <p>Trabajamos para que la app funcione siempre, pero puede haber interrupciones por mantenimiento o causas ajenas. Podemos mejorar o cambiar funciones; si cambian estas condiciones de forma importante, te avisaremos en la app.</p>
       <h3>8. Baja</h3>
-      <p>Puedes dejar de usar la app y borrar tu cuenta cuando quieras desde Ajustes → Borrar mi cuenta.</p>
+      <p>Puedes dejar de usar la app y borrar tu cuenta cuando quieras desde Ajustes → Borrar mi cuenta. Si eres cliente, tu entrenador lo confirma y, si no lo hace, se borra sola a las 48 horas.</p>
       <h3>9. Responsabilidad</h3>
       <p>Rendimo responde de los daños causados por dolo o negligencia grave. No responde del contenido de los planes del entrenador ni de cómo se ejecutan los ejercicios. Nada de esto limita tus derechos como consumidor.</p>
       <h3>10. Ley aplicable</h3>

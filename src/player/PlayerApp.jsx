@@ -5,7 +5,7 @@ import { applyBrand } from '../App.jsx';
 import { useClub, clubDay, matchText } from '../lib/club.js';
 import ClubEditor from '../ui/ClubEditor.jsx';
 import TestRadar from '../ui/TestRadar.jsx';
-import { ThemePicker, Group, Row, PasswordForm, DeleteAccount, LegalRows, AppVersion } from '../ui/SettingsKit.jsx';
+import { ThemePicker, Group, Row, PasswordForm, DeleteAccount, LegalRows, AppVersion, deleteDue, fmtDue } from '../ui/SettingsKit.jsx';
 import PlanCard from '../ui/PlanCard.jsx';
 import { iso, addDays, mondayOf, dow, DAYS, fmtDate, wellness, waURL, parseISO } from '../lib/util.js';
 import { sessionsOfWeek, calendarWeekIdx, totalWeeks, label } from '../lib/program.js';
@@ -24,6 +24,7 @@ export default function PlayerApp({ player, session, onLogout, canSwitch, onSwit
   const [tab, setTab] = useState(() => { try { return sessionStorage.getItem('ptab') || 'hoy'; } catch { return 'hoy'; } });
   const act = useAction();
   const club = useClub(player.id);
+  const [delAt, setDelAt] = useState(player.delete_requested_at || null);
 
   const load = useCallback(async () => {
     const since = iso(addDays(new Date(), -90));
@@ -53,7 +54,7 @@ export default function PlayerApp({ player, session, onLogout, canSwitch, onSwit
   const prog = d.programs.find((p) => p.start_date && p.start_date <= today) || d.programs[d.programs.length - 1] || null;
   // Entrenamiento personal: sin club, partidos ni RPE del club
   const team = player.kind !== 'personal';
-  const ctx = { ...d, player, prog, load, today, team, club: team ? club : { ...club, schedule: null, events: [] } };
+  const ctx = { ...d, player, prog, load, today, team, club: team ? club : { ...club, schedule: null, events: [] }, delAt, setDelAt };
   const doneToday = d.checkins.some((c) => c.date === today);
 
   return (
@@ -67,6 +68,9 @@ export default function PlayerApp({ player, session, onLogout, canSwitch, onSwit
       </header>
       <div className="pwrap">
         <div className="pdate">{new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
+        {delAt && tab !== 'cuenta' && (
+          <div className="delbanner" role="status"><span>Has pedido borrar tu cuenta. Se borrará el <b>{fmtDue(deleteDue(delAt))}</b>.</span><button className="btn sm" onClick={() => setT('cuenta')}>Ver o cancelar</button></div>
+        )}
         {tab === 'checkin' && <Checkin ctx={ctx} onDone={() => setT('hoy')} />}
         {tab === 'hoy' && <Today ctx={ctx} goCheckin={() => setT('checkin')} />}
         {tab === 'semana' && <Week ctx={ctx} />}
@@ -163,7 +167,7 @@ function Account({ ctx, session, onLogout, canSwitch, onSwitch }) {
           </ul>
           {coach?.whatsapp && <a className="btn sm" style={{ justifySelf: 'start' }} target="_blank" rel="noopener" href={askCopy}>Pedir una copia de mis datos</a>}
         </Row>
-        <LegalRows extra={<Row icon="trash" label="Borrar mi cuenta" danger><DeleteAccount /></Row>} />
+        <LegalRows extra={<Row icon="trash" label={ctx.delAt ? 'Borrado solicitado' : 'Borrar mi cuenta'} danger defaultOpen={!!ctx.delAt}><DeleteAccount delAt={ctx.delAt} setDelAt={ctx.setDelAt} /></Row>} />
       </Group>
       <Group title="Sesión">
         {canSwitch && <Row icon="swap" label="Ir a mi panel de entrenador" onClick={onSwitch} />}
