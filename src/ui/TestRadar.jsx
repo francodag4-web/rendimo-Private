@@ -7,13 +7,13 @@ const load = (k, d) => { try { const v = JSON.parse(localStorage.getItem(k)); re
 const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
 
 // Radar de tests 0-10: elige qué tests salen (3 a 8) y compara dos fechas
-export default function TestRadar({ tests, storeKey, title = 'Perfil de tests' }) {
+export default function TestRadar({ tests, storeKey, title = 'Perfil de tests', from, to, controls = true }) {
   const axesAll = useMemo(() => radarAxes(tests), [tests]);
-  const dates = useMemo(() => radarDates(tests), [tests]);
+  const dates = useMemo(() => radarDates(tests).filter((d) => !to || d <= to), [tests, to]);
   const [sel, setSel] = useState(() => load(`radar:${storeKey}`, null));
   const keys = (sel || defaultAxes(axesAll)).filter((k) => axesAll.some((a) => a.key === k));
   const [da, setDa] = useState(null); const [db, setDb] = useState(null);
-  const A = da && dates.includes(da) ? da : dates[0];
+  const A = da && dates.includes(da) ? da : (from && [...dates].reverse().find((d) => d <= from)) || dates[0];
   const B = db && dates.includes(db) ? db : dates[dates.length - 1];
   if (axesAll.length < 3) return (
     <section className="panel stack"><h3>{title}</h3><p className="muted small">El radar aparece con 3 tests distintos o más (por ejemplo: resistencia, salto, fuerza, agilidad y sprint). Ahora hay {axesAll.length}.</p></section>
@@ -38,7 +38,7 @@ export default function TestRadar({ tests, storeKey, title = 'Perfil de tests' }
     <section className="panel stack radar">
       <div className="between">
         <h3>{title} <span className="muted small">· puntuación 0-10</span></h3>
-        {dates.length > 1 && (
+        {controls && dates.length > 1 && (
           <div className="row small">
             <label className="row">Antes<select aria-label="Fecha anterior" style={{ width: 'auto' }} value={A} onChange={(e) => setDa(e.target.value)}>{dates.map((d) => <option key={d} value={d}>{fmtDate(d)}</option>)}</select></label>
             <label className="row">Ahora<select aria-label="Fecha actual" style={{ width: 'auto' }} value={B} onChange={(e) => setDb(e.target.value)}>{dates.map((d) => <option key={d} value={d}>{fmtDate(d)}</option>)}</select></label>
@@ -82,14 +82,14 @@ export default function TestRadar({ tests, storeKey, title = 'Perfil de tests' }
           })}</tbody>
         </table>
       </div>
-      <details className="small">
+      {controls && <details className="small">
         <summary style={{ cursor: 'pointer' }}><b>Elegir tests</b> <span className="muted">({keys.length} de {axesAll.length}, entre 3 y 8)</span></summary>
         <div className="row" style={{ marginTop: 8 }}>
           {axesAll.map((a) => (
             <button key={a.key} type="button" className={'chipbtn' + (keys.includes(a.key) ? ' on' : '')} aria-pressed={keys.includes(a.key)} onClick={() => toggle(a.key)}>{a.label} <span className="muted">· {a.cat}</span></button>
           ))}
         </div>
-      </details>
+      </details>}
       <p className="muted small">0 = peor · 10 = mejor. Escala de referencia para adulto de deporte de equipo; la fuerza relativa es el 1RM dividido por el peso corporal.{axes.some((a, i) => ptsB[i]?.scale === 'own') ? ' * Sin referencia publicada: 0 es su peor marca y 10 la mejor.' : ''}</p>
     </section>
   );

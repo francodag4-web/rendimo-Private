@@ -17,6 +17,7 @@ import { PlayerPrograms, Health, Notes } from './PlayerTabs.jsx';
 import WeekNoteEditor from './WeekNote.jsx';
 import TestRadar from '../ui/TestRadar.jsx';
 import { DeletionBanner } from './Deletion.jsx';
+import { Goals, Body, Reports } from './ProgressTabs.jsx';
 
 const END_REASONS = ['Objetivo cumplido', 'Precio', 'Falta de tiempo', 'Lesión', 'Se pasa a presencial', 'Sin respuesta', 'Otro'];
 
@@ -248,9 +249,12 @@ function PlayerDetail({ id }) {
         <input aria-label="Fecha de la próxima revisión" type="date" style={{ width: 'auto' }} value={p.next_review || ''} onChange={(e) => upd({ next_review: e.target.value || null }, 'Fecha de revisión guardada.')} />
         <button className="btn sm" onClick={reviewDone}>Revisión hecha</button>
       </div>
-      <Tabs tabs={[['resumen', 'Resumen'], ['tests', 'Tests'], ['lesiones', 'Lesiones'], ['plan', 'Plan'], ['clinica', 'Historia clínica'], ['notas', 'Notas'], ['datos', 'Datos']]} value={tab} onChange={setTab} />
+      <Tabs tabs={[['resumen', 'Resumen'], ['objetivos', 'Objetivos'], ['tests', 'Tests'], ['composicion', 'Composición'], ['informes', 'Informes'], ['lesiones', 'Lesiones'], ['plan', 'Plan'], ['clinica', 'Historia clínica'], ['notas', 'Notas'], ['datos', 'Datos']]} value={tab} onChange={setTab} />
       {tab === 'resumen' && <Summary p={p} onTab={setTab} />}
       {tab === 'tests' && <Tests p={p} />}
+      {tab === 'objetivos' && <Goals p={p} />}
+      {tab === 'composicion' && <Body p={p} />}
+      {tab === 'informes' && <Reports p={p} />}
       {tab === 'lesiones' && <Injuries p={p} />}
       {tab === 'plan' && <PlayerPrograms p={p} />}
       {tab === 'clinica' && <Health p={p} />}

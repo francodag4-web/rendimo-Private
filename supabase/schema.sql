@@ -817,3 +817,87 @@ begin
   return jsonb_build_object('coach', is_c, 'player', is_p);
 end $$;
 
+
+-- 16 · Informes de progreso: objetivos con plazos, composición corporal, FC y descanso, informes publicados
+
+-- Datos del cliente para el % de grasa (Jackson-Pollock necesita sexo y edad)
+alter table public.players add column if not exists sex text check (sex in ('h','m'));
+alter table public.players add column if not exists birth_date date;
+grant insert (sex, birth_date), update (sex, birth_date) on public.players to authenticated;
+
+-- FC y descanso real en cada sesión (opcionales)
+alter table public.session_logs add column if not exists hr_avg smallint check (hr_avg between 30 and 240);
+alter table public.session_logs add column if not exists hr_max smallint check (hr_max between 30 and 240);
+alter table public.session_logs add column if not exists rest_avg_s smallint check (rest_avg_s between 0 and 1800);
+
+-- Objetivos con plazo (se dan por conseguidos solos cuando un registro alcanza la meta)
+create table if not exists public.goals (
+  id         uuid primary key default gen_random_uuid(),
+  coach_id   uuid not null references public.coaches(id) on delete cascade,
+  player_id  uuid not null references public.players(id) on delete cascade,
+  title      text not null,
+  metric     text not null,            -- nombre del test o medida: «CMJ», «Peso corporal», «% grasa», «Cintura»…
+  unit       text,
+  better     text not null default 'mas' check (better in ('mas','menos')),
+  start_value numeric(10,2),
+  target     numeric(10,2) not null,
+  start_date date not null default current_date,
+  deadline   date,
+  achieved_at date,                    -- manual (si no se mide con un test)
+  note       text,
+  created_at timestamptz not null default now()
+);
+create index if not exists goals_player_idx on public.goals(player_id);
+
+-- Composición corporal: peso, perímetros (cm) y pliegues (mm)
+create table if not exists public.body_measures (
+  id         uuid primary key default gen_random_uuid(),
+  coach_id   uuid not null references public.coaches(id) on delete cascade,
+  player_id  uuid not null references public.players(id) on delete cascade,
+  date       date not null default current_date,
+  weight     numeric(5,1),
+  arm        numeric(5,1), chest numeric(5,1), waist numeric(5,1), hip numeric(5,1), thigh numeric(5,1), calf numeric(5,1),
+  sf_chest   numeric(4,1), sf_abdomen numeric(4,1), sf_thigh numeric(4,1), sf_triceps numeric(4,1),
+  sf_suprailiac numeric(4,1), sf_subscapular numeric(4,1), sf_midaxillary numeric(4,1),
+  note       text,
+  created_at timestamptz not null default now()
+);
+create index if not exists body_player_idx on public.body_measures(player_id);
+
+-- Informes publicados: periodo y valoración del entrenador (los datos se calculan al abrirlo)
+create table if not exists public.reports (
+  id         uuid primary key default gen_random_uuid(),
+  coach_id   uuid not null references public.coaches(id) on delete cascade,
+  player_id  uuid not null references public.players(id) on delete cascade,
+  date_from  date not null,
+  date_to    date not null,
+  title      text,
+  summary    text,                     -- valoración del entrenador
+  next_steps text,                     -- próximos pasos
+  published  boolean not null default true,
+  created_at timestamptz not null default now()
+);
+create index if not exists reports_player_idx on public.reports(player_id);
+
+grant select, insert, update, delete on public.goals, public.body_measures, public.reports to authenticated;
+alter table public.goals enable row level security;
+alter table public.body_measures enable row level security;
+alter table public.reports enable row level security;
+
+drop policy if exists goals_coach on public.goals;
+create policy goals_coach on public.goals for all to authenticated
+  using (coach_id = auth.uid()) with check (coach_id = auth.uid() and public.coach_of(player_id) = auth.uid());
+drop policy if exists goals_self on public.goals;
+create policy goals_self on public.goals for select to authenticated using (player_id = public.my_player_id());
+
+drop policy if exists body_coach on public.body_measures;
+create policy body_coach on public.body_measures for all to authenticated
+  using (coach_id = auth.uid()) with check (coach_id = auth.uid() and public.coach_of(player_id) = auth.uid());
+drop policy if exists body_self on public.body_measures;
+create policy body_self on public.body_measures for select to authenticated using (player_id = public.my_player_id());
+
+drop policy if exists reports_coach on public.reports;
+create policy reports_coach on public.reports for all to authenticated
+  using (coach_id = auth.uid()) with check (coach_id = auth.uid() and public.coach_of(player_id) = auth.uid());
+drop policy if exists reports_self on public.reports;
+create policy reports_self on public.reports for select to authenticated using (player_id = public.my_player_id() and published);

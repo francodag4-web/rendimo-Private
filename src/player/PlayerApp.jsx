@@ -1,6 +1,8 @@
 import { testSummary, fmtNum, testValue, PLANS, money, commitment, wellLevel, setPlans, feeLabel, payCover, feeSuffix } from '../lib/domain.js';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { supabase, q, PLATFORM, fetchAll } from '../lib/supabase.js';
+import { supabase, q, qOpt, PLATFORM, fetchAll } from '../lib/supabase.js';
+import Report from '../ui/Report.jsx';
+import { metricSeries, goalStatus, GOAL_STATUS } from '../lib/progress.js';
 import { applyBrand } from '../App.jsx';
 import { useClub, clubDay, matchText } from '../lib/club.js';
 import ClubEditor from '../ui/ClubEditor.jsx';
@@ -29,7 +31,7 @@ export default function PlayerApp({ player, session, onLogout, canSwitch, onSwit
   const load = useCallback(async () => {
     const since = iso(addDays(new Date(), -90));
     const soft = (b) => b.then(({ data }) => data || []);
-    const [coach, programs, checkins, logs, exercises, tests, payments, weekNotes, plans] = await Promise.all([
+    const [coach, programs, checkins, logs, exercises, tests, payments, weekNotes, plans, goals, body, reports] = await Promise.all([
       q(supabase.from('coaches').select('*').eq('id', player.coach_id).limit(1)).then((r) => r[0] || null),
       q(supabase.from('programs').select('*').eq('player_id', player.id).order('start_date', { ascending: false })),
       q(supabase.from('checkins').select('*').eq('player_id', player.id).gte('date', since).order('date')),
@@ -39,9 +41,12 @@ export default function PlayerApp({ player, session, onLogout, canSwitch, onSwit
       soft(supabase.from('payments').select('*').eq('player_id', player.id)),
       soft(supabase.from('week_notes').select('*').eq('player_id', player.id).order('week', { ascending: false }).limit(4)),
       soft(supabase.from('plans').select('*').eq('coach_id', player.coach_id)),
+      soft(supabase.from('goals').select('*').eq('player_id', player.id).order('deadline')),
+      soft(supabase.from('body_measures').select('*').eq('player_id', player.id).order('date')),
+      soft(supabase.from('reports').select('*').eq('player_id', player.id).order('created_at', { ascending: false })),
     ]);
     setPlans(plans);
-    setD({ coach, programs, checkins, logs, exercises, tests, payments, weekNotes, plans });
+    setD({ coach, programs, checkins, logs, exercises, tests, payments, weekNotes, plans, goals, body, reports });
   }, [player.id, player.coach_id]);
 
   useEffect(() => { act(load); }, [load]);
@@ -201,11 +206,15 @@ export const parseRest = (txt = '') => {
 const startRest = (sec) => window.dispatchEvent(new CustomEvent('rest:start', { detail: sec }));
 
 // Temporizador de descanso fijo abajo
+// Avisa del descanso real (desde que empieza hasta que se salta, se cierra o empieza el siguiente)
+const restDone = (s) => { if (s >= 5) window.dispatchEvent(new CustomEvent('rest:done', { detail: Math.min(1800, Math.round(s)) })); };
 function RestTimer() {
   const [end, setEnd] = useState(null);
+  const startRef = useRef(null);
+  const finish = () => { if (startRef.current) { restDone((Date.now() - startRef.current) / 1000); startRef.current = null; } };
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
-    const on = (e) => { setEnd(Date.now() + e.detail * 1000); setNow(Date.now()); };
+    const on = (e) => { finish(); startRef.current = Date.now(); setEnd(Date.now() + e.detail * 1000); setNow(Date.now()); };
     window.addEventListener('rest:start', on);
     return () => window.removeEventListener('rest:start', on);
   }, []);
@@ -225,7 +234,7 @@ function RestTimer() {
       <b className="num">{Math.floor(left / 60)}:{String(left % 60).padStart(2, '0')}</b>
       <span className="row">
         {left > 0 && <button type="button" className="btn sm" onClick={() => setEnd(end + 15000)}>+15 s</button>}
-        <button type="button" className="btn sm" onClick={() => setEnd(null)}>{left === 0 ? 'Cerrar' : 'Saltar'}</button>
+        <button type="button" className="btn sm" onClick={() => { finish(); setEnd(null); }}>{left === 0 ? 'Cerrar' : 'Saltar'}</button>
       </span>
     </div>
   );
@@ -286,11 +295,17 @@ function SessionCard({ ctx, s, open: startOpen, hero }) {
   const [rpe, setRpe] = useState(log?.rpe != null ? Number(log.rpe) : null);
   const [min, setMin] = useState(log?.duration_min || 60);
   const [note, setNote] = useState(log?.note || '');
+  const [hr, setHr] = useState({ avg: log?.hr_avg || '', max: log?.hr_max || '' });
+  const [rests, setRests] = useState([]);
+  useEffect(() => { const on = (e) => setRests((r) => [...r, e.detail]); window.addEventListener('rest:done', on); return () => window.removeEventListener('rest:done', on); }, []);
   const act = useAction();
   const vid = useMemo(() => Object.fromEntries(exercises.map((e) => [e.name, e])), [exercises]);
   const save = () => act(async () => {
     const sets = Object.values(done);
-    await q(supabase.from('session_logs').upsert({ player_id: player.id, program_id: prog.id, session_key: s.id, date: log?.date || today, rpe, duration_min: Number(min) || null, sets, note: note || null }, { onConflict: 'player_id,session_key,date' }));
+    const hrN = (v) => { const n = Number(v); return n >= 30 && n <= 240 ? Math.round(n) : null; };
+    const restAvg = rests.length ? Math.round(rests.reduce((a, b) => a + b, 0) / rests.length) : log?.rest_avg_s ?? null;
+    await qOpt((x) => supabase.from('session_logs').upsert(x, { onConflict: 'player_id,session_key,date' }),
+      { player_id: player.id, program_id: prog.id, session_key: s.id, date: log?.date || today, rpe, duration_min: Number(min) || null, sets, note: note || null, hr_avg: hrN(hr.avg), hr_max: hrN(hr.max), rest_avg_s: restAvg }, ['hr_avg', 'hr_max', 'rest_avg_s']);
     await load();
     setOpen(false);
   }, '¡Sesión registrada! Buen trabajo.');
@@ -351,6 +366,11 @@ function SessionCard({ ctx, s, open: startOpen, hero }) {
             <Scale name="RPE" n={11} from={0} value={rpe} onChange={setRpe} pain />
             <label className="f">Duración (minutos)<input type="number" min="1" max="600" value={min} onChange={(e) => setMin(e.target.value)} /></label>
             {rpe != null && <span className="small">Carga de la sesión: <b className="num">{rpe * (Number(min) || 0)}</b> (RPE × minutos)</span>}
+            <div className="row" style={{ gap: 8 }}>
+              <label className="f" style={{ flex: '1 1 120px' }}>FC media (ppm)<input id="hr-avg" type="number" inputMode="numeric" min="30" max="240" placeholder="Opcional" value={hr.avg} onChange={(e) => setHr({ ...hr, avg: e.target.value })} /></label>
+              <label className="f" style={{ flex: '1 1 120px' }}>FC máxima (ppm)<input id="hr-max" type="number" inputMode="numeric" min="30" max="240" placeholder="Opcional" value={hr.max} onChange={(e) => setHr({ ...hr, max: e.target.value })} /></label>
+            </div>
+            <span className="muted small">Si entrenas con reloj o banda de pulso. {rests.length ? `Descanso real medio: ${Math.floor(rests.reduce((a, b) => a + b, 0) / rests.length / 60)}:${String(Math.round(rests.reduce((a, b) => a + b, 0) / rests.length) % 60).padStart(2, '0')} (${rests.length} descansos con el temporizador).` : 'El descanso real se guarda solo si usas el temporizador.'}</span>
             <label className="f">Comentario para tu entrenador (opcional)<input value={note} onChange={(e) => setNote(e.target.value)} /></label>
             <button className="btn pri big-btn" disabled={rpe == null} onClick={save}>{log ? 'Actualizar registro' : 'Terminar y registrar sesión'}</button>
           </div>
@@ -478,7 +498,9 @@ function Progress({ ctx }) {
           ))}</ul>
         </Hero>
       )}
+      <MyGoals ctx={ctx} />
       {tests.length > 0 && <TestRadar tests={tests} storeKey={'yo:' + ctx.player.id} title="Mi perfil" />}
+      <MyReports ctx={ctx} />
       {cur && cur.list.length > 1 && (
         <div className="panel stack">
           <div className="between"><h3>{cur.name} ({cur.unit || '—'})</h3>
@@ -490,6 +512,44 @@ function Progress({ ctx }) {
       <div className="panel stack"><h3>Tu carga semanal</h3><p className="muted small">RPE × minutos de cada sesión, sumado por semana.</p><Bars data={weeks} /></div>
       <div className="panel stack"><h3>Tu bienestar</h3><p className="muted small">De 5 a 25. Si baja varios días seguidos, coméntalo con tu entrenador.</p><Line data={days} min={5} max={25} refLine={13} /></div>
     </div>
+  );
+}
+
+// Mis objetivos: meta, plazo y si se ha conseguido
+function MyGoals({ ctx }) {
+  const { goals = [], tests = [], body = [], player } = ctx;
+  if (!goals.length) return null;
+  return (
+    <section className="panel stack">
+      <h3>Mis objetivos</h3>
+      <ul className="list goallist">{goals.map((g) => {
+        const s = goalStatus(g, metricSeries(g.metric, { tests, body, player }));
+        return (
+          <li key={g.id}>
+            <span className="stack" style={{ gap: 4 }}><b>{g.title}</b>
+              <span className="muted small">{fmtNum(s.cur)} → meta {fmtNum(g.target)} {g.unit || ''}{g.deadline ? ` · antes del ${fmtDate(g.deadline)}` : ''}</span>
+              {s.prog != null && <span className="gbar"><i className={GOAL_STATUS[s.status][1]} style={{ width: `${s.prog * 100}%` }} /></span>}</span>
+            <span className={'pill ' + GOAL_STATUS[s.status][1]}>{s.hit ? `¡Conseguido! ${fmtDate(s.hit)}` : GOAL_STATUS[s.status][0]}</span>
+          </li>
+        );
+      })}</ul>
+    </section>
+  );
+}
+
+// Informes que ha publicado el entrenador
+function MyReports({ ctx }) {
+  const { reports = [], player, coach } = ctx;
+  const [open, setOpen] = useState(null);
+  if (!reports.length) return null;
+  return (
+    <section className="panel stack">
+      <h3>Mis informes de progreso</h3>
+      <ul className="list">{reports.map((r) => (
+        <li key={r.id}><span><b>{fmtDate(r.date_from)} – {fmtDate(r.date_to)}</b></span><button className="btn sm pri" onClick={() => setOpen(r)}>Ver y descargar</button></li>
+      ))}</ul>
+      {open && <Report playerId={player.id} report={open} coach={coach} onClose={() => setOpen(null)} />}
+    </section>
   );
 }
 
