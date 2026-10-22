@@ -139,7 +139,8 @@ function ClientSelBar({ chosen, onClear }) {
           <button className="btn pri" onClick={doTpl}>Asignar a {who}</button>
         </section>
       ) : <Empty>Aún no tienes plantillas. Créalas en Programación.</Empty>)}
-      {mode === 'plan' && (
+      {mode === 'plan' && !PLANS.length && <Empty>Aún no tienes planes. Créalos en Planes.</Empty>}
+      {mode === 'plan' && PLANS.length > 0 && (
         <section className="panel row" aria-label="Cambiar plan">
           <b>Plan</b>
           <select id="msel-plan" style={{ width: 'auto' }} value={plan} onChange={(e) => setPlan(e.target.value)}>{PLANS.map((x) => <option key={x.name} value={x.name}>{x.name} · {feeLabel(x)}</option>)}</select>
@@ -188,7 +189,7 @@ function NewPlayer() {
           <label className="f">Correo (opcional: si no lo sabes, se registra él con el enlace)<input id="np-email" type="email" value={f.email} onChange={set('email')} /></label>
           <label className="f">WhatsApp (con prefijo, ej. 34600111222)<input id="np-phone" inputMode="tel" value={f.phone} onChange={set('phone')} /></label>
           <label className="f">Posición o deporte<input id="np-pos" value={f.position} onChange={set('position')} placeholder={f.kind === 'personal' ? 'Ej. Running, pádel…' : 'Ej. Pilier, Ala…'} /></label>
-          <label className="f">Plan<select id="np-plan" value={f.plan} onChange={setPlan}>{planOptions().map((p) => <option key={p}>{p}</option>)}</select></label>
+          <label className="f">Plan<select id="np-plan" value={f.plan} onChange={setPlan}><option value="">Sin plan</option>{planOptions().map((p) => <option key={p}>{p}</option>)}</select></label>
           <label className="f">Importe (€)<span className="row"><input id="np-fee" inputMode="decimal" style={{ flex: 1 }} value={f.fee ?? ''} onChange={set('fee')} /><select style={{ width: 'auto' }} value={f.fee_type} onChange={set('fee_type')}><option value="mensual">al mes</option><option value="trimestral">al trimestre</option><option value="unico">único</option></select></span></label>
           <label className="f">Fecha de alta<input id="np-start" type="date" required value={f.start_date} onChange={set('start_date')} /></label>
           <label className="f">Compromiso (meses)<input inputMode="numeric" value={f.commitment_months} onChange={set('commitment_months')} /></label>
@@ -639,7 +640,7 @@ function Data({ p }) {
         <label className="f">Correo{p.user_id ? '' : ' (opcional)'}<input type="email" value={f.email || ''} onChange={set('email')} required={!!p.user_id} /></label>
         <label className="f">WhatsApp<input value={f.phone || ''} onChange={set('phone')} /></label>
         <label className="f">Posición o deporte<input value={f.position || ''} onChange={set('position')} /></label>
-        <label className="f">Plan<select value={f.plan || ''} onChange={(e) => { const d = planDefaults(e.target.value); setF({ ...f, plan: e.target.value, ...(d ? { fee: d.fee, fee_type: d.type, commitment_months: d.commitment } : {}) }); }}>{planOptions(f.plan).map((x) => <option key={x}>{x}</option>)}</select></label>
+        <label className="f">Plan<select value={f.plan || ''} onChange={(e) => { const d = planDefaults(e.target.value); setF({ ...f, plan: e.target.value, ...(d ? { fee: d.fee, fee_type: d.type, commitment_months: d.commitment } : {}) }); }}><option value="">Sin plan</option>{planOptions(f.plan).map((x) => <option key={x}>{x}</option>)}</select></label>
         <label className="f">Importe (€)<span className="row"><input id="d-fee" inputMode="decimal" style={{ flex: 1 }} value={f.fee ?? ''} onChange={set('fee')} /><select style={{ width: 'auto' }} value={f.fee_type || 'mensual'} onChange={set('fee_type')}><option value="mensual">al mes</option><option value="trimestral">al trimestre</option><option value="unico">único</option></select></span></label>
         <label className="f">Objetivo<input id="d-obj" value={f.objective || ''} onChange={set('objective')} placeholder="Ej. Sprint 10 m < 1,80 s antes del 15/01" /></label>
         {f.kind !== 'personal' && <label className="f">Club / partido<input id="d-club" value={f.club_days || ''} onChange={set('club_days')} placeholder="Ej. Mar y jue · domingo" /></label>}

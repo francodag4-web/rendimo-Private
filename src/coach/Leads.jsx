@@ -68,7 +68,7 @@ function NewLead({ onDone }) {
         <label className="f">WhatsApp<input id="ld-phone" inputMode="tel" value={f.phone} onChange={set('phone')} placeholder="34600111222" /></label>
         <label className="f">Correo<input type="email" value={f.email} onChange={set('email')} /></label>
         <label className="f">Posición o deporte<input value={f.position} onChange={set('position')} /></label>
-        <label className="f">Plan que le interesa<select value={f.plan} onChange={set('plan')}>{planOptions().map((p) => <option key={p}>{p}</option>)}</select></label>
+        <label className="f">Plan que le interesa<select value={f.plan} onChange={set('plan')}><option value="">Sin decidir</option>{planOptions().map((p) => <option key={p}>{p}</option>)}</select></label>
         <label className="f">Objetivo<input value={f.goal} onChange={set('goal')} /></label>
       </div>
       <label className="f">Lesiones<input value={f.injuries} onChange={set('injuries')} /></label>

@@ -20,7 +20,9 @@ export function useAssignPlan() {
 // Selector compacto para asignar plan desde cualquier sitio
 export function AssignPlan({ p, label = 'Asignar' }) {
   const assign = useAssignPlan();
+  const { go } = useCoach();
   const [plan, setPlan] = useState(PLANS.find((x) => x.name === p.plan)?.name || defaultPlan().name);
+  if (!PLANS.length) return <button type="button" className="btn sm" onClick={() => go('planes')}>Crear un plan</button>;
   return (
     <span className="row">
       <select aria-label={`Plan de ${p.name}`} style={{ width: 'auto' }} value={plan} onChange={(e) => setPlan(e.target.value)}>
@@ -125,7 +127,6 @@ export default function Plans() {
   const hidden = rows.filter((r) => !isLive(fromRow(r)));
   const other = active.filter((p) => !rows.some((x) => x.name === p.plan) && !live.some((x) => x.name === p.plan));
   const monthly = active.reduce((a, p) => a + monthlyValue(p.fee, p.fee_type), 0);
-  const noDb = !rows.length;
   const done = () => setForm(null);
   const del = (r) => act(async () => {
     await q(supabase.from('plans').delete().eq('id', r.id));
@@ -139,11 +140,18 @@ export default function Plans() {
         <div><h1>Planes</h1><p>Tus planes y ofertas, quién está en cada uno y lo que suman. Lo que ves aquí es lo que ven tus clientes y tu formulario.</p></div>
         <div className="row">
           <span className="chip ok">{money(monthly)} al mes en cuotas activas</span>
-          {!noDb && <button className="btn" onClick={() => setForm('plan')}>+ Nuevo plan</button>}
-          {!noDb && <button className="btn pri" onClick={() => setForm('offer')}>+ Nueva oferta</button>}
+          <button className="btn" onClick={() => setForm('plan')}>+ Nuevo plan</button>
+          <button className="btn pri" onClick={() => setForm('offer')}>+ Nueva oferta</button>
         </div>
       </div>
-      {noDb && <div className="panel"><b>Para editar precios y crear ofertas</b> falta actualizar la base de datos (archivo 10-planes.sql). Mientras, ves los planes de siempre.</div>}
+      {!live.length && !form && (
+        <section className="panel stack" aria-label="Sin planes">
+          <h3>Aún no tienes planes</h3>
+          <p className="muted">Crea los planes que ofreces (precio, si es al mes, al trimestre o pago único, compromiso y revisiones). Tus clientes los verán en su app y en tu formulario de solicitudes.</p>
+          <p className="muted small">Por ejemplo: un programa sin seguimiento con pago único, un plan mensual con revisiones cada dos semanas y otro más completo con revisión semanal.</p>
+          <div className="row"><button className="btn pri" onClick={() => setForm('plan')}>Crear mi primer plan</button></div>
+        </section>
+      )}
       {(form === 'plan' || form === 'offer') && <PlanForm offer={form === 'offer'} onDone={done} />}
       {form && typeof form === 'object' && <PlanForm key={form.id} row={form} onDone={done} />}
       <div className="board">

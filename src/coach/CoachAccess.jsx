@@ -4,8 +4,9 @@ import { useAction, useToast } from '../ui/ui.jsx';
 import { fmtDate } from '../lib/util.js';
 
 // Solo administradores: autorizar correos como entrenador y pasarles el acceso por WhatsApp
+const APP_URL = /(^|\.)rendimo\.app$/.test(window.location.hostname) ? window.location.origin : 'https://rendimo.app';
 export const coachInviteMsg = (email) =>
-  `Hola! Te he dado acceso a Rendimo como entrenador/a. Entra en ${window.location.host} con este correo: ${email}\n\nAl entrar tendrás tu panel vacío, para crear tus clientes y mandarles la invitación desde la app. En Ajustes puedes poner tu marca, tu color y tu logo. Cualquier cosa me dices`;
+  `Hola! Te he dado acceso a Rendimo como entrenador/a. Entra aquí con este correo (${email}): ${APP_URL}\n\nAl entrar tendrás tu panel vacío, para crear tus clientes y mandarles la invitación desde la app. En Ajustes puedes poner tu marca, tu color y tu logo. Cualquier cosa me dices`;
 
 const rpc = async (fn, args) => {
   const { data, error } = await supabase.rpc(fn, args);

@@ -8,13 +8,13 @@ import PlanCard from './ui/PlanCard.jsx';
 // Formulario público para que un cliente pida plaza. No necesita cuenta.
 export default function PublicLead({ slug }) {
   const [brand, setBrand] = useState(undefined);
-  const [f, setF] = useState({ name: '', phone: '', email: '', position: '', plan: defaultPlan().name, goal: '', injuries: '', message: '', ok: false });
+  const [f, setF] = useState({ name: '', phone: '', email: '', position: '', plan: defaultPlan().name || 'Aún no lo sé', goal: '', injuries: '', message: '', ok: false });
   const [state, setState] = useState('form'); // form | sending | done | error
   const [err, setErr] = useState('');
   useEffect(() => {
     Promise.all([supabase.rpc('public_brand', { coach_slug: slug }), supabase.rpc('public_plans', { coach_slug: slug })]).then(([{ data }, pl]) => {
       setPlans(pl.error ? [] : pl.data);
-      setF((x) => ({ ...x, plan: defaultPlan().name }));
+      setF((x) => ({ ...x, plan: defaultPlan().name || 'Aún no lo sé' }));
       setBrand(data || null);
       if (data) { applyBrand(data.color); document.title = `Solicitud · ${data.brand_name}`; }
     });

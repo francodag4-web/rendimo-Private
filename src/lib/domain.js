@@ -1,7 +1,7 @@
 // Reglas del negocio compartidas: planes, compromiso, revisiones, tests, lesiones y avisos de la programación
 import { iso, parseISO, addDays, daysBetween, norm } from './util.js';
 
-// Escalera de precios acordada. Es el valor por defecto: los planes reales se guardan en la base de datos
+// Ejemplo de escalera de precios (no se muestra: cada entrenador crea los suyos en la base de datos)
 export const DEFAULT_PLANS = [
   { name: 'Programa pretemporada', fee: 39, type: 'unico', commitment: null, review: null, color: 't-a', tag: 'Sin seguimiento',
     pitch: 'Para entrenar por tu cuenta con un plan serio.',
@@ -13,16 +13,17 @@ export const DEFAULT_PLANS = [
     pitch: 'Vuelta al juego tras lesión, por fases y con criterios.',
     features: ['Todo lo del coaching rugby', 'Revisión semanal', 'Criterios objetivos para volver al contacto', 'Coordinación con su fisio o médico si hace falta'] },
 ];
-// Planes vigentes (se sustituyen por los de la base de datos al cargar)
-export let PLANS = DEFAULT_PLANS;
+// Planes vigentes del entrenador (vacío hasta que crea los suyos)
+export let PLANS = [];
 export const fromRow = (r) => ({
   id: r.id, name: r.name, fee: Number(r.fee), type: r.fee_type, commitment: r.commitment_months || null, review: r.review_days || null,
   pitch: r.pitch || '', features: r.features || [], tag: r.tag || '', color: r.color || 't-g', offer: !!r.is_offer,
   oldFee: r.old_fee != null ? Number(r.old_fee) : null, until: r.valid_until || null, active: r.active !== false, sort: r.sort || 0,
 });
 export const isLive = (p) => p.active !== false && (!p.until || p.until >= iso());
-export const setPlans = (rows) => { PLANS = rows?.length ? rows.map(fromRow).filter(isLive).sort((a, b) => a.sort - b.sort || a.fee - b.fee) : DEFAULT_PLANS; return PLANS; };
-export const defaultPlan = () => PLANS.find((p) => p.name === 'Coaching rugby') || PLANS.find((p) => !p.offer) || PLANS[0];
+export const setPlans = (rows) => { PLANS = rows?.length ? rows.map(fromRow).filter(isLive).sort((a, b) => a.sort - b.sort || a.fee - b.fee) : []; return PLANS; };
+const NO_PLAN = { name: '', fee: null, type: 'mensual', commitment: null, review: null };
+export const defaultPlan = () => PLANS.find((p) => !p.offer) || PLANS[0] || NO_PLAN;
 export const PLAN_COLORS = [['t-g', 'Verde'], ['t-r', 'Rojo'], ['t-a', 'Amarillo'], ['t-o', 'Naranja'], ['t-p', 'Morado'], ['t-b', 'Azul'], ['t-t', 'Turquesa'], ['t-s', 'Gris']];
 export const FEE_TYPES = [['mensual', 'Al mes'], ['trimestral', 'Al trimestre'], ['unico', 'Pago único']];
 export const feeSuffix = (t) => (t === 'unico' ? ' pago único' : t === 'trimestral' ? '/trimestre' : '/mes');
@@ -56,7 +57,7 @@ export const planPatch = (plan, p = {}) => {
   return patch;
 };
 export const LEGACY_PLANS = ['Online', 'Online + revisiones', 'Presencial'];
-export const planOptions = (current) => [...new Set([...PLANS.map((p) => p.name), ...LEGACY_PLANS, current].filter(Boolean))];
+export const planOptions = (current) => [...new Set([...PLANS.map((p) => p.name), current].filter(Boolean))];
 export const planDefaults = (name) => PLANS.find((p) => p.name === name) || null;
 
 export const money = (n) => (n == null || n === '' ? '—' : `${Number(n).toLocaleString('es-ES', { maximumFractionDigits: 2 })} €`);
