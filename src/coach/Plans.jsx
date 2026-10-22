@@ -227,7 +227,7 @@ export default function Plans() {
           ))}</ul>
         </section>
       )}
-      <section className="panel stack">
+      {(live.length > 0 || other.length > 0) && <section className="panel stack">
         <h3>Clientes sin uno de estos planes</h3>
         {other.length ? (
           <ul className="list">{other.map((p) => (
@@ -235,7 +235,7 @@ export default function Plans() {
           ))}</ul>
         ) : <Empty>Todos tus clientes activos están en uno de tus planes.</Empty>}
         <p className="muted small">Precio especial: pulsa «€» junto al cliente para cobrarle un precio distinto al del plan. Para cambiarle de plan, usa la pestaña Datos de su ficha.</p>
-      </section>
+      </section>}
     </>
   );
 }
