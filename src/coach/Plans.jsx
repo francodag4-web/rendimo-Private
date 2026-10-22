@@ -61,12 +61,27 @@ const blank = (offer) => ({
   name: offer ? 'Oferta ' : '', fee: '', fee_type: 'mensual', commitment_months: offer ? '' : 3, review_days: 14,
   pitch: '', features: '', tag: '', color: offer ? 't-p' : 't-b', is_offer: !!offer, old_fee: '', valid_until: offer ? iso(addDays(new Date(), 30)) : '', active: true,
 });
+// Bases para empezar: estructura y servicios típicos, sin nombre ni precio (cada entrenador pone los suyos)
+export const PLAN_BASES = [
+  { key: 'sin', label: 'Sin seguimiento', hint: 'Pago único · el cliente entrena por su cuenta', name: 'Ej. Programa 8 semanas',
+    fee_type: 'unico', commitment_months: '', review_days: '', color: 't-a',
+    features: ['Programa adaptado a su objetivo, en la app', 'Vídeo de cada ejercicio', 'Registro de cargas y sesiones en la app', 'Tests de inicio y final para medir el progreso'] },
+  { key: 'seg', label: 'Con seguimiento', hint: 'Mensual · revisión cada 2 semanas', name: 'Ej. Entrenamiento online',
+    fee_type: 'mensual', commitment_months: 3, review_days: 14, color: 't-g',
+    features: ['Valoración y tests iniciales', 'Programa personalizado en la app', 'Revisión y ajuste de cargas cada dos semanas', 'Check-in diario de cómo llega a entrenar', 'Contacto por WhatsApp para dudas', 'Re-test al final de cada bloque'] },
+  { key: 'full', label: 'Seguimiento completo', hint: 'Mensual · revisión semanal', name: 'Ej. Online premium',
+    fee_type: 'mensual', commitment_months: 3, review_days: 7, color: 't-r',
+    features: ['Todo lo del plan con seguimiento', 'Revisión semanal', 'Videollamada de seguimiento', 'Informe de progreso en PDF', 'Coordinación con su fisio o médico si hace falta'] },
+];
+const fromBase = (b, keep = {}) => ({ ...blank(false), ...keep, fee_type: b.fee_type, commitment_months: b.commitment_months, review_days: b.review_days, color: b.color, features: b.features.join('\n'), base: b.key });
 const toForm = (r) => ({ ...r, fee: String(r.fee), old_fee: r.old_fee ?? '', commitment_months: r.commitment_months ?? '', review_days: r.review_days ?? '', valid_until: r.valid_until || '', features: (r.features || []).join('\n'), pitch: r.pitch || '', tag: r.tag || '' });
 
-function PlanForm({ row, offer, onDone }) {
+function PlanForm({ row, offer, base, onDone }) {
   const { uid, load, players } = useCoach();
   const act = useAction();
-  const [f, setF] = useState(row ? toForm(row) : blank(offer));
+  const [f, setF] = useState(row ? toForm(row) : base ? fromBase(PLAN_BASES.find((b) => b.key === base)) : blank(offer));
+  const pickBase = (k) => { const b = PLAN_BASES.find((x) => x.key === k); setF(b ? fromBase(b, { name: f.name, fee: f.fee, pitch: f.pitch, tag: f.tag }) : { ...blank(false), name: f.name, fee: f.fee }); };
+  const cur = PLAN_BASES.find((b) => b.key === f.base);
   const set = (k) => (e) => setF({ ...f, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value });
   const num = (v) => (v === '' || v == null ? null : Number(String(v).replace(',', '.')));
   const save = (e) => {
@@ -93,9 +108,14 @@ function PlanForm({ row, offer, onDone }) {
   return (
     <form className="panel stack" onSubmit={save}>
       <h3>{row ? `Editar «${row.name}»` : f.is_offer ? 'Nueva oferta' : 'Nuevo plan'}</h3>
+      {!row && !f.is_offer && (
+        <label className="f">Partir de una base<select id="pf-base" value={f.base || ''} onChange={(e) => pickBase(e.target.value)}>
+          <option value="">En blanco</option>{PLAN_BASES.map((b) => <option key={b.key} value={b.key}>{b.label} · {b.hint}</option>)}
+        </select><span className="muted small">Trae el tipo de pago, las revisiones y lo que incluye. El nombre y el precio los pones tú; cambia lo que quieras.</span></label>
+      )}
       <div className="grid3">
-        <label className="f">Nombre<input id="pf-name" required maxLength={60} value={f.name} onChange={set('name')} placeholder={f.is_offer ? 'Ej. Oferta verano 3 meses' : 'Ej. Online sin revisiones'} /></label>
-        <label className="f">Precio (€)<input id="pf-fee" required inputMode="decimal" value={f.fee} onChange={set('fee')} /></label>
+        <label className="f">Nombre<input id="pf-name" required maxLength={60} value={f.name} onChange={set('name')} placeholder={f.is_offer ? 'Ej. Oferta verano 3 meses' : cur?.name || 'Ej. Online sin revisiones'} /></label>
+        <label className="f">Precio (€)<input id="pf-fee" required inputMode="decimal" value={f.fee} onChange={set('fee')} placeholder="Tu precio" /></label>
         <label className="f">Pago<select value={f.fee_type} onChange={set('fee_type')}><option value="mensual">Al mes</option><option value="trimestral">Al trimestre</option><option value="unico">Pago único</option></select></label>
         {f.is_offer && <label className="f">Precio normal (sale tachado)<input id="pf-old" inputMode="decimal" value={f.old_fee} onChange={set('old_fee')} placeholder="Ej. 89" /></label>}
         {f.is_offer && <label className="f">Válida hasta<input id="pf-until" type="date" value={f.valid_until} onChange={set('valid_until')} /></label>}
@@ -146,13 +166,23 @@ export default function Plans() {
       </div>
       {!live.length && !form && (
         <section className="panel stack" aria-label="Sin planes">
-          <h3>Aún no tienes planes</h3>
-          <p className="muted">Crea los planes que ofreces (precio, si es al mes, al trimestre o pago único, compromiso y revisiones). Tus clientes los verán en su app y en tu formulario de solicitudes.</p>
-          <p className="muted small">Por ejemplo: un programa sin seguimiento con pago único, un plan mensual con revisiones cada dos semanas y otro más completo con revisión semanal.</p>
-          <div className="row"><button className="btn pri" onClick={() => setForm('plan')}>Crear mi primer plan</button></div>
+          <h3>Crea tus planes</h3>
+          <p className="muted">Elige una base para empezar: trae el tipo de pago, las revisiones y lo que incluye. Tú le pones el nombre y el precio, y cambias lo que quieras. Tus clientes los verán en su app y en tu formulario de solicitudes.</p>
+          <div className="board">
+            {PLAN_BASES.map((b) => (
+              <section key={b.key} className={'tile ' + b.color} aria-label={`Base: ${b.label}`}>
+                <span className="kick">{b.hint}</span>
+                <b className="pname">{b.label}</b>
+                <ul>{b.features.map((x) => <li key={x}>{x}</li>)}</ul>
+                <button type="button" className="btn" onClick={() => { setForm('base:' + b.key); window.scrollTo(0, 0); }}>Usar esta base</button>
+              </section>
+            ))}
+          </div>
+          <div className="row"><button className="btn" onClick={() => setForm('plan')}>Empezar en blanco</button></div>
         </section>
       )}
       {(form === 'plan' || form === 'offer') && <PlanForm offer={form === 'offer'} onDone={done} />}
+      {typeof form === 'string' && form.startsWith('base:') && <PlanForm key={form} base={form.slice(5)} onDone={done} />}
       {form && typeof form === 'object' && <PlanForm key={form.id} row={form} onDone={done} />}
       <div className="board">
         {live.map((pl) => {
