@@ -901,3 +901,97 @@ create policy reports_coach on public.reports for all to authenticated
   using (coach_id = auth.uid()) with check (coach_id = auth.uid() and public.coach_of(player_id) = auth.uid());
 drop policy if exists reports_self on public.reports;
 create policy reports_self on public.reports for select to authenticated using (player_id = public.my_player_id() and published);
+
+-- ===== 17-entrenadores.sql =====
+-- =====================================================================
+-- 17 · Autorizar entrenadores desde la app (solo administradores)
+-- Pegar entero en Supabase -> SQL Editor -> Run. Se puede repetir.
+-- =====================================================================
+
+-- Quién invitó a cada entrenador y cuándo
+alter table public.coach_allowlist add column if not exists created_at timestamptz not null default now();
+alter table public.coach_allowlist add column if not exists invited_by uuid references auth.users(id) on delete set null;
+
+-- Administradores de la plataforma (pueden autorizar entrenadores)
+create table if not exists public.platform_admins (
+  email text primary key check (email = lower(email))
+);
+alter table public.platform_admins enable row level security;
+revoke all on public.platform_admins from anon, authenticated;
+
+-- Tú: todas las cuentas de entrenador que no son de prueba (@rendimo.app)
+-- y la cuenta de pruebas automáticas.
+insert into public.platform_admins (email)
+select lower(email) from public.coaches where email not like '%@rendimo.app'
+on conflict do nothing;
+insert into public.platform_admins (email) values ('test-coach@rendimo.app') on conflict do nothing;
+
+create or replace function public.is_platform_admin() returns boolean
+language sql stable security definer set search_path = '' as $$
+  select exists (select 1 from public.platform_admins
+                  where email = lower(coalesce(auth.jwt() ->> 'email', '')));
+$$;
+
+-- Lista de correos autorizados y si ya han entrado
+create or replace function public.list_coach_access()
+returns table (email text, created_at timestamptz, joined boolean, brand_name text, is_admin boolean, is_client boolean)
+language plpgsql stable security definer set search_path = '' as $$
+begin
+  if not public.is_platform_admin() then raise exception 'Solo para administradores'; end if;
+  return query
+    select a.email, a.created_at,
+           exists (select 1 from public.coaches c where lower(c.email) = a.email),
+           (select c.brand_name from public.coaches c where lower(c.email) = a.email limit 1),
+           exists (select 1 from public.platform_admins pa where pa.email = a.email),
+           exists (select 1 from public.players p where lower(p.email) = a.email)
+      from public.coach_allowlist a
+     order by a.created_at desc;
+end $$;
+
+-- Autorizar un correo como entrenador
+create or replace function public.authorize_coach(mail text) returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare
+  m text := lower(trim(coalesce(mail, '')));
+  existed boolean;
+begin
+  if not public.is_platform_admin() then raise exception 'Solo para administradores'; end if;
+  if m !~ '^[^@\s]+@[^@\s]+\.[^@\s]+$' then raise exception 'Correo no válido'; end if;
+  select exists (select 1 from public.coach_allowlist where email = m) into existed;
+  insert into public.coach_allowlist (email, invited_by) values (m, auth.uid()) on conflict (email) do nothing;
+  -- si ya tenía cuenta (por ejemplo, como cliente), queda como entrenador al momento
+  insert into public.coaches (id, email)
+    select u.id, m from auth.users u where lower(u.email) = m
+  on conflict (id) do nothing;
+  return jsonb_build_object(
+    'email', m,
+    'existed', existed,
+    'joined', exists (select 1 from public.coaches c where lower(c.email) = m),
+    'is_client', exists (select 1 from public.players p where lower(p.email) = m)
+  );
+end $$;
+
+-- Quitar una autorización que aún no se ha usado (no borra cuentas de entrenador)
+create or replace function public.revoke_coach(mail text) returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare m text := lower(trim(coalesce(mail, '')));
+begin
+  if not public.is_platform_admin() then raise exception 'Solo para administradores'; end if;
+  if exists (select 1 from public.coaches c where lower(c.email) = m) then
+    raise exception 'Ya ha entrado como entrenador: su cuenta no se borra desde aquí';
+  end if;
+  delete from public.coach_allowlist where email = m;
+  return jsonb_build_object('email', m, 'removed', true);
+end $$;
+
+revoke all on function public.is_platform_admin() from public, anon;
+revoke all on function public.list_coach_access() from public, anon;
+revoke all on function public.authorize_coach(text) from public, anon;
+revoke all on function public.revoke_coach(text) from public, anon;
+grant execute on function public.is_platform_admin() to authenticated;
+grant execute on function public.list_coach_access() to authenticated;
+grant execute on function public.authorize_coach(text) to authenticated;
+grant execute on function public.revoke_coach(text) to authenticated;
+
+-- Comprueba quién ha quedado como administrador (debe salir tu correo y test-coach@rendimo.app)
+select email from public.platform_admins order by email;

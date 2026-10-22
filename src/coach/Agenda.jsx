@@ -48,30 +48,43 @@ export default function Agenda() {
   const delTask = (ev) => act(async () => {
     await q(supabase.from('tasks').delete().eq('id', ev.id));
     await load('tasks');
+    setForm(null);
     toast('Tarea eliminada.', { undo: () => act(async () => { const { id, created_at, ...rest } = ev.raw; await q(supabase.from('tasks').insert(rest)); await load('tasks'); }) });
   });
   const save = (e) => {
     e.preventDefault();
     act(async () => {
-      await q(supabase.from('tasks').insert({ coach_id: uid, title: form.title.trim(), due_at: new Date(`${form.date}T${form.time || '09:00'}`).toISOString(), player_id: form.player || null }));
+      const row = { title: form.title.trim(), due_at: new Date(`${form.date}T${form.time || '09:00'}`).toISOString(), player_id: form.player || null };
+      if (form.id) await q(supabase.from('tasks').update(row).eq('id', form.id));
+      else await q(supabase.from('tasks').insert({ coach_id: uid, ...row }));
       await load('tasks');
       setForm(null);
-    }, 'Tarea guardada.');
+    }, form.id ? 'Tarea actualizada.' : 'Tarea guardada.');
+  };
+  // Tocar una tarea la abre para editarla; borrar pide confirmación y se puede deshacer
+  const edit = (ev) => {
+    const d = new Date(ev.at);
+    setForm({ id: ev.id, raw: ev.raw, title: ev.title, date: iso(d), time: `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`, player: ev.player || '', sure: false });
+    setTimeout(() => document.getElementById('t-title')?.scrollIntoView({ block: 'center' }), 30);
   };
 
   return (
     <>
       <div className="pagehead">
-        <div><h1>Agenda</h1><p>Tus tareas y los avisos de las notas de cada cliente.</p></div>
+        <div><h1>Agenda</h1><p>Tus tareas y los avisos de las notas de cada cliente. Toca una tarea para editarla.</p></div>
         <button className="btn pri" onClick={() => setForm({ title: '', date: sel, time: '09:00', player: '' })}>+ Nueva tarea</button>
       </div>
       {form && (
-        <form className="panel row" onSubmit={save}>
+        <form className="panel row" onSubmit={save} aria-label={form.id ? 'Editar tarea' : 'Nueva tarea'}>
+          {form.id && <b style={{ flex: '1 1 100%' }}>Editar tarea</b>}
           <input id="t-title" required placeholder="Ej. Grabar vídeo de cargada" style={{ flex: '1 1 220px' }} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
           <input id="t-date" type="date" required style={{ width: 'auto' }} value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
           <input id="t-time" type="time" style={{ width: 'auto' }} value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value })} />
           <select style={{ width: 'auto' }} value={form.player} onChange={(e) => setForm({ ...form, player: e.target.value })}><option value="">Sin cliente</option>{players.filter((p) => !p.end_date).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
           <button className="btn pri" type="submit">Guardar</button><button type="button" className="btn" onClick={() => setForm(null)}>Cancelar</button>
+          {form.id && (form.sure
+            ? <span className="row small">¿Eliminar esta tarea?<button type="button" className="btn sm danger" onClick={() => delTask({ id: form.id, raw: form.raw })}>Sí, eliminar</button><button type="button" className="btn sm" onClick={() => setForm({ ...form, sure: false })}>No</button></span>
+            : <button type="button" className="btn ghost danger" onClick={() => setForm({ ...form, sure: true })}>Eliminar</button>)}
         </form>
       )}
       <div className="panel stack">
@@ -110,11 +123,11 @@ export default function Agenda() {
                   {ev.map((e) => (
                     <li key={e.id} style={e.done ? { opacity: 0.55 } : {}}>
                       <span className="row"><input type="checkbox" style={{ width: 18 }} checked={e.done} onChange={() => toggle(e)} aria-label="Hecha" />
-                        <span style={e.done ? { textDecoration: 'line-through' } : {}}>{e.kind === 'note' ? (e.raw.kind === 'importante' ? '⚠ ' : '📝 ') : e.kind === 'alert' ? (e.raw.urgent ? '🔴 ' : '🔔 ') : e.kind === 'review' ? '🔁 ' : e.kind === 'call' ? '📹 ' : ''}{e.title}</span>
+                        {e.kind === 'task' ? <button type="button" className="linkish" style={e.done ? { textDecoration: 'line-through' } : {}} onClick={() => edit(e)} aria-label={`Editar tarea: ${e.title}`}>{e.title}</button> : <span style={e.done ? { textDecoration: 'line-through' } : {}}>{e.kind === 'note' ? (e.raw.kind === 'importante' ? '⚠ ' : '📝 ') : e.kind === 'alert' ? (e.raw.urgent ? '🔴 ' : '🔔 ') : e.kind === 'review' ? '🔁 ' : e.kind === 'call' ? '📹 ' : ''}{e.title}</span>}
                         {e.kind === 'call' && <button className="btn ghost sm" onClick={() => go('solicitudes')}>Ver solicitud</button>}
                         {e.player && <button className="btn ghost sm" onClick={() => go('clientes', e.player)}>{pname(e.player)}</button>}
                       </span>
-                      <span className="row"><span className="muted small">{fmtDateTime(e.at).split('·')[1]}</span>{e.kind === 'task' && <button className="ib" aria-label="Eliminar tarea" onClick={() => delTask(e)}>✕</button>}</span>
+                      <span className="row"><span className="muted small">{fmtDateTime(e.at).split('·')[1]}</span>{e.kind === 'task' && <button className="ib" aria-label="Editar" title="Editar" onClick={() => edit(e)}>✎</button>}</span>
                     </li>
                   ))}
                 </ul>

@@ -5,6 +5,7 @@ import { fileToDataURL } from '../lib/util.js';
 import { applyBrand } from '../App.jsx';
 import { useAction } from '../ui/ui.jsx';
 import { MESSAGES } from '../lib/messages.js';
+import CoachAccess, { useIsAdmin } from './CoachAccess.jsx';
 import { ThemePicker, Group, Row, PasswordForm, DeleteAccount, LegalRows, AppVersion } from '../ui/SettingsKit.jsx';
 
 export default function Settings() {
@@ -12,6 +13,7 @@ export default function Settings() {
   // Desde «Más» se llega directo a una sección: #/ajustes/seguridad o #/ajustes/borrar
   useEffect(() => { if (route.id) setTimeout(() => document.getElementById('set-' + route.id)?.scrollIntoView({ block: 'center' }), 50); }, [route.id]);
   const act = useAction();
+  const admin = useIsAdmin();
   const [f, setF] = useState({ brand_name: coach.brand_name, brand_short: coach.brand_short || '', color: coach.color, logo: coach.logo, whatsapp: coach.whatsapp || '', instagram: coach.instagram || '', slug: coach.slug || '' });
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   const onLogo = async (e) => {
@@ -70,6 +72,11 @@ export default function Settings() {
           <p className="muted small">Entre llaves van los datos que se rellenan solos: {'{nombre}'}, {'{mes}'}, {'{importe}'}… Sin emojis a propósito: WhatsApp los pierde al abrir el mensaje desde un enlace.</p>
         </div>
       </details>
+      {admin && (
+        <Group title="Plataforma">
+          <Row key={"e" + route.id} id="set-entrenadores" icon="user" label="Autorizar entrenadores" sub="Solo lo ves tú, como administrador" defaultOpen={route.id === 'entrenadores'}><CoachAccess /></Row>
+        </Group>
+      )}
       <Group title="Seguridad">
         <Row key={"s" + route.id} id="set-seguridad" icon="lock" label="Contraseña" sub="Crear o cambiar" defaultOpen={route.id === 'seguridad'}><PasswordForm session={session} /></Row>
       </Group>

@@ -528,3 +528,7 @@ body.report-open{overflow:hidden}
   .rp-kpis{grid-template-columns:repeat(5,1fr)}.rp-two{grid-template-columns:1fr 1fr}
   .report-sheet *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
+
+/* Texto que se toca para abrir (tareas de la agenda) */
+.linkish{background:none;border:0;padding:0;font:inherit;color:inherit;text-align:left;cursor:pointer;text-decoration:underline;text-decoration-color:color-mix(in srgb,currentColor 30%,transparent);text-underline-offset:3px}
+.linkish:hover{color:var(--brand)}

@@ -9,7 +9,7 @@ export function ToastProvider({ children }) {
   const push = useCallback((msg, opts = {}) => {
     const id = Math.random();
     setList((l) => [...l, { id, msg, ...opts }]);
-    setTimeout(() => setList((l) => l.filter((t) => t.id !== id)), opts.undo ? 6000 : opts.error ? 6000 : 3000);
+    setTimeout(() => setList((l) => l.filter((t) => t.id !== id)), opts.undo ? 10000 : opts.error ? 6000 : 3000);
   }, []);
   return (
     <ToastCtx.Provider value={push}>
