@@ -83,6 +83,7 @@ export default function CoachApp({ session, onLogout, canSwitch, onSwitch }) {
       goals: () => soft(supabase.from('goals').select('*').order('deadline', { nullsFirst: false })),
       body: () => soft(supabase.from('body_measures').select('*').order('date')),
       reports: () => soft(supabase.from('reports').select('*').order('created_at', { ascending: false })),
+      liveClasses: () => soft(supabase.from('live_classes').select('*').gte('starts_at', addDays(new Date(), -60).toISOString()).order('starts_at')),
     };
     const keys = only ? [].concat(only) : Object.keys(jobs);
     try {

@@ -3,14 +3,19 @@ import { useCoach } from './CoachApp.jsx';
 import { supabase, q } from '../lib/supabase.js';
 import { iso, addDays, mondayOf, DAYS, DAYS_SHORT, MONTHS, fmtDateTime } from '../lib/util.js';
 import { useAction, useToast, Empty } from '../ui/ui.jsx';
+import { waURL } from '../lib/util.js';
+import ClassForm from './LiveClasses.jsx';
+import { classStatus, classReminder, classTime } from '../lib/classes.js';
 
 export default function Agenda() {
-  const { tasks, notes, players, uid, load, go, alertActions = [], leads = [] } = useCoach();
+  const { tasks, notes, players, uid, load, go, alertActions = [], leads = [], liveClasses = [] } = useCoach();
   const act = useAction();
   const toast = useToast();
   const [month, setMonth] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
   const [sel, setSel] = useState(iso());
   const [form, setForm] = useState(null);
+  const [cls, setCls] = useState(null); // { c } edición o { date } nueva
+  const openClass = (v) => { setForm(null); setCls(v); setTimeout(() => document.getElementById('lc-player')?.scrollIntoView({ block: 'center' }), 30); };
   const pname = (id) => players.find((p) => p.id === id)?.name;
 
   // Eventos por día: tareas + notas con aviso
@@ -21,6 +26,7 @@ export default function Agenda() {
   alertActions.filter((x) => x.due_date && x.status !== 'nueva').forEach((x) => add(x.due_date, { kind: 'alert', id: x.id, title: `Alerta: ${x.alert_key.split(':')[0].replace('sin-checkin', 'sin check-in')}${x.note ? ' · ' + x.note : ''}`, done: x.status === 'gestionada', at: `${x.due_date}T09:00:00`, player: x.player_id, raw: x }));
   players.filter((p) => !p.end_date && p.next_review).forEach((p) => add(p.next_review, { kind: 'review', id: 'r' + p.id, title: 'Revisión', done: false, at: `${p.next_review}T08:00:00`, player: p.id, raw: p }));
   leads.filter((l) => l.status === 'activa' && l.call_at).forEach((l) => add(iso(l.call_at), { kind: 'call', id: 'c' + l.id, title: `Videollamada con ${l.name}`, done: (l.stage || 0) >= 3, at: l.call_at, player: null, raw: l }));
+  liveClasses.forEach((c) => add(iso(c.starts_at), { kind: 'class', id: 'lc' + c.id, title: `Clase en directo · ${pname(c.player_id)?.split(' ')[0] || ''}`, done: classStatus(c) === 'past', at: c.starts_at, player: c.player_id, raw: c }));
   Object.values(events).forEach((l) => l.sort((a, b) => a.at.localeCompare(b.at)));
 
   const first = mondayOf(month);
@@ -63,6 +69,8 @@ export default function Agenda() {
   };
   // Tocar una tarea la abre para editarla; borrar pide confirmación y se puede deshacer
   const edit = (ev) => {
+    if (ev.kind === 'class') return openClass({ c: ev.raw });
+    setCls(null);
     const d = new Date(ev.at);
     setForm({ id: ev.id, raw: ev.raw, title: ev.title, date: iso(d), time: `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`, player: ev.player || '', sure: false });
     setTimeout(() => document.getElementById('t-title')?.scrollIntoView({ block: 'center' }), 30);
@@ -71,9 +79,10 @@ export default function Agenda() {
   return (
     <>
       <div className="pagehead">
-        <div><h1>Agenda</h1><p>Tus tareas y los avisos de las notas de cada cliente. Toca una tarea para editarla.</p></div>
-        <button className="btn pri" onClick={() => setForm({ title: '', date: sel, time: '09:00', player: '' })}>+ Nueva tarea</button>
+        <div><h1>Agenda</h1><p>Tus tareas, clases en directo y avisos de cada cliente. Toca una tarea o clase para editarla.</p></div>
+        <span className="row"><button className="btn" onClick={() => openClass({ date: sel })}>+ Nueva clase</button><button className="btn pri" onClick={() => { setCls(null); setForm({ title: '', date: sel, time: '09:00', player: '' }); }}>+ Nueva tarea</button></span>
       </div>
+      {cls && <ClassForm key={cls.c?.id || 'new'} c={cls.c} date={cls.date} onClose={() => setCls(null)} />}
       {form && (
         <form className="panel row" onSubmit={save} aria-label={form.id ? 'Editar tarea' : 'Nueva tarea'}>
           {form.id && <b style={{ flex: '1 1 100%' }}>Editar tarea</b>}
@@ -95,7 +104,7 @@ export default function Agenda() {
             <button className="ib" aria-label="Mes siguiente" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}>›</button>
             <button className="btn sm" onClick={() => { const d = new Date(); setMonth(new Date(d.getFullYear(), d.getMonth(), 1)); setSel(iso()); }}>Hoy</button>
           </div>
-          <span className="row small"><span className="pill brand">Tarea</span><span className="pill" style={{ background: 'color-mix(in srgb,var(--info) 18%,transparent)' }}>Aviso de nota</span></span>
+          <span className="row small"><span className="pill brand">Tarea</span><span className="pill" style={{ background: 'color-mix(in srgb,var(--info) 18%,transparent)' }}>Aviso de nota</span><span className="pill" style={{ background: 'color-mix(in srgb,#8E44AD 20%,transparent)' }}>Clase en directo</span></span>
         </div>
         <div className="cal">
           {DAYS_SHORT.map((d) => <div key={d} className="dow">{d}</div>)}
@@ -104,7 +113,7 @@ export default function Agenda() {
             return (
               <button key={k} type="button" className={'day' + (c.getMonth() !== month.getMonth() ? ' out' : '') + (k === iso() ? ' today' : '') + (k === sel ? ' sel' : '')} onClick={() => setSel(k)} aria-label={`${c.getDate()} de ${MONTHS[c.getMonth()]}: ${ev.length} eventos`}>
                 <span className="dn">{c.getDate()}</span>
-                {ev.slice(0, 3).map((e) => <span key={e.id} className={'ev' + (e.kind === 'note' ? ' note' : e.kind === 'alert' ? ' alert' : e.kind === 'review' || e.kind === 'call' ? ' note' : '') + (e.done ? ' done' : '')}>{e.kind === 'review' ? `Revisión ${pname(e.player)?.split(' ')[0]}` : e.title}</span>)}
+                {ev.slice(0, 3).map((e) => <span key={e.id} className={'ev' + (e.kind === 'class' ? ' class' : e.kind === 'note' ? ' note' : e.kind === 'alert' ? ' alert' : e.kind === 'review' || e.kind === 'call' ? ' note' : '') + (e.done ? ' done' : '')}>{e.kind === 'review' ? `Revisión ${pname(e.player)?.split(' ')[0]}` : e.kind === 'class' ? `${fmtDateTime(e.at).split('· ')[1]} ${pname(e.player)?.split(' ')[0] || ''}` : e.title}</span>)}
                 {ev.length > 3 && <span className="small muted">+{ev.length - 3}</span>}
               </button>
             );
@@ -122,12 +131,14 @@ export default function Agenda() {
                 <ul className="list">
                   {ev.map((e) => (
                     <li key={e.id} style={e.done ? { opacity: 0.55 } : {}}>
-                      <span className="row"><input type="checkbox" style={{ width: 18 }} checked={e.done} onChange={() => toggle(e)} aria-label="Hecha" />
-                        {e.kind === 'task' ? <button type="button" className="linkish" style={e.done ? { textDecoration: 'line-through' } : {}} onClick={() => edit(e)} aria-label={`Editar tarea: ${e.title}`}>{e.title}</button> : <span style={e.done ? { textDecoration: 'line-through' } : {}}>{e.kind === 'note' ? (e.raw.kind === 'importante' ? '⚠ ' : '📝 ') : e.kind === 'alert' ? (e.raw.urgent ? '🔴 ' : '🔔 ') : e.kind === 'review' ? '🔁 ' : e.kind === 'call' ? '📹 ' : ''}{e.title}</span>}
+                      <span className="row">{e.kind === 'class' ? <span aria-hidden="true" style={{ width: 18, textAlign: 'center' }}>🎥</span> : <input type="checkbox" style={{ width: 18 }} checked={e.done} onChange={() => toggle(e)} aria-label="Hecha" />}
+                        {e.kind === 'task' || e.kind === 'class' ? <button type="button" className="linkish" style={e.done ? { textDecoration: 'line-through' } : {}} onClick={() => edit(e)} aria-label={`${e.kind === 'class' ? 'Editar clase' : 'Editar tarea'}: ${e.title}`}>{e.title}{e.kind === 'class' && <span className="muted small"> · {classTime(e.raw)}</span>}</button> : <span style={e.done ? { textDecoration: 'line-through' } : {}}>{e.kind === 'note' ? (e.raw.kind === 'importante' ? '⚠ ' : '📝 ') : e.kind === 'alert' ? (e.raw.urgent ? '🔴 ' : '🔔 ') : e.kind === 'review' ? '🔁 ' : e.kind === 'call' ? '📹 ' : ''}{e.title}</span>}
                         {e.kind === 'call' && <button className="btn ghost sm" onClick={() => go('solicitudes')}>Ver solicitud</button>}
+                        {e.kind === 'class' && !e.done && <a className="btn sm pri" href={e.raw.meet_url} target="_blank" rel="noopener">Unirse</a>}
+                        {e.kind === 'class' && !e.done && players.find((p) => p.id === e.player)?.phone && <a className="btn ghost sm" href={waURL(players.find((p) => p.id === e.player).phone, classReminder(e.raw, pname(e.player)))} target="_blank" rel="noopener">Recordar por WhatsApp</a>}
                         {e.player && <button className="btn ghost sm" onClick={() => go('clientes', e.player)}>{pname(e.player)}</button>}
                       </span>
-                      <span className="row"><span className="muted small">{fmtDateTime(e.at).split('·')[1]}</span>{e.kind === 'task' && <button className="ib" aria-label="Editar" title="Editar" onClick={() => edit(e)}>✎</button>}</span>
+                      <span className="row"><span className="muted small">{fmtDateTime(e.at).split('·')[1]}</span>{(e.kind === 'task' || e.kind === 'class') && <button className="ib" aria-label="Editar" title="Editar" onClick={() => edit(e)}>✎</button>}</span>
                     </li>
                   ))}
                 </ul>

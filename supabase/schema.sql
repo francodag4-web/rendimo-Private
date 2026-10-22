@@ -995,3 +995,32 @@ grant execute on function public.revoke_coach(text) to authenticated;
 
 -- Comprueba quién ha quedado como administrador (debe salir tu correo y test-coach@rendimo.app)
 select email from public.platform_admins order by email;
+
+-- ===== 18-clases.sql =====
+-- =====================================================================
+-- 18 · Clases en directo (enlace de Google Meet u otra videollamada)
+-- Pegar entero en Supabase -> SQL Editor -> Run. Se puede repetir.
+-- =====================================================================
+create table if not exists public.live_classes (
+  id           uuid primary key default gen_random_uuid(),
+  coach_id     uuid not null references public.coaches(id) on delete cascade,
+  player_id    uuid not null references public.players(id) on delete cascade,
+  starts_at    timestamptz not null,
+  duration_min int not null default 60 check (duration_min between 10 and 240),
+  meet_url     text not null check (meet_url ~ '^https://' and length(meet_url) <= 500),
+  title        text not null default 'Clase en directo' check (length(title) <= 120),
+  note         text check (length(note) <= 500),
+  series_id    uuid,                                   -- clases que se repiten cada semana
+  created_at   timestamptz not null default now()
+);
+create index if not exists live_classes_coach on public.live_classes (coach_id, starts_at);
+create index if not exists live_classes_player on public.live_classes (player_id, starts_at);
+alter table public.live_classes enable row level security;
+grant select, insert, update, delete on public.live_classes to authenticated;
+
+drop policy if exists live_classes_coach on public.live_classes;
+create policy live_classes_coach on public.live_classes for all to authenticated
+  using (coach_id = auth.uid()) with check (coach_id = auth.uid() and public.coach_of(player_id) = auth.uid());
+drop policy if exists live_classes_self on public.live_classes;
+create policy live_classes_self on public.live_classes for select to authenticated
+  using (player_id = public.my_player_id());

@@ -9,6 +9,7 @@ import ClubEditor from '../ui/ClubEditor.jsx';
 import TestRadar from '../ui/TestRadar.jsx';
 import { ThemePicker, Group, Row, PasswordForm, DeleteAccount, LegalRows, AppVersion, deleteDue, fmtDue } from '../ui/SettingsKit.jsx';
 import PlanCard from '../ui/PlanCard.jsx';
+import { classStatus, classDay, classTime, minsTo } from '../lib/classes.js';
 import { iso, addDays, mondayOf, dow, DAYS, fmtDate, wellness, waURL, parseISO } from '../lib/util.js';
 import { sessionsOfWeek, calendarWeekIdx, totalWeeks, label } from '../lib/program.js';
 import { useAction, Tabs, Empty, Loading, Bars, Line, WAIcon } from '../ui/ui.jsx';
@@ -31,7 +32,7 @@ export default function PlayerApp({ player, session, onLogout, canSwitch, onSwit
   const load = useCallback(async () => {
     const since = iso(addDays(new Date(), -90));
     const soft = (b) => b.then(({ data }) => data || []);
-    const [coach, programs, checkins, logs, exercises, tests, payments, weekNotes, plans, goals, body, reports] = await Promise.all([
+    const [coach, programs, checkins, logs, exercises, tests, payments, weekNotes, plans, goals, body, reports, liveClasses] = await Promise.all([
       q(supabase.from('coaches').select('*').eq('id', player.coach_id).limit(1)).then((r) => r[0] || null),
       q(supabase.from('programs').select('*').eq('player_id', player.id).order('start_date', { ascending: false })),
       q(supabase.from('checkins').select('*').eq('player_id', player.id).gte('date', since).order('date')),
@@ -44,9 +45,10 @@ export default function PlayerApp({ player, session, onLogout, canSwitch, onSwit
       soft(supabase.from('goals').select('*').eq('player_id', player.id).order('deadline')),
       soft(supabase.from('body_measures').select('*').eq('player_id', player.id).order('date')),
       soft(supabase.from('reports').select('*').eq('player_id', player.id).order('created_at', { ascending: false })),
+      soft(supabase.from('live_classes').select('*').eq('player_id', player.id).gte('starts_at', new Date(Date.now() - 5 * 3600000).toISOString()).order('starts_at').limit(30)),
     ]);
     setPlans(plans);
-    setD({ coach, programs, checkins, logs, exercises, tests, payments, weekNotes, plans, goals, body, reports });
+    setD({ coach, programs, checkins, logs, exercises, tests, payments, weekNotes, plans, goals, body, reports, liveClasses });
   }, [player.id, player.coach_id]);
 
   useEffect(() => { act(load); }, [load]);
@@ -388,7 +390,7 @@ function Today({ ctx, goCheckin }) {
       <button className="btn" onClick={goCheckin}>Hacer check-in</button>
     </Hero>
   );
-  const top = <>{ctx.team && <ClubRPE ctx={ctx} />}{nudge}<WeekNote ctx={ctx} />{ctx.team && <ClubToday ctx={ctx} />}</>;
+  const top = <><LiveClass ctx={ctx} />{ctx.team && <ClubRPE ctx={ctx} />}{nudge}<WeekNote ctx={ctx} />{ctx.team && <ClubToday ctx={ctx} />}</>;
   const msg = (t, sub) => <div className="stack">{top}<Hero color="t-s" title={t} sub={sub} /></div>;
   if (!prog) return msg(`${greet()}, ${player.name.split(' ')[0]}`, 'Tu entrenador aún no te ha asignado un programa.');
   const w = calendarWeekIdx(prog);
@@ -644,6 +646,24 @@ function ClubRPE({ ctx }) {
 }
 
 // Nota de la semana que deja el entrenador
+// Clase en directo: la de hoy, grande y con el botón para entrar; si no hay hoy, la próxima de esta semana
+function LiveClass({ ctx }) {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => { const t = setInterval(() => setNow(new Date()), 30000); return () => clearInterval(t); }, []);
+  const c = (ctx.liveClasses || []).find((x) => classStatus(x, now) !== 'past');
+  if (!c) return null;
+  const st = classStatus(c, now);
+  const day = classDay(c, now);
+  if (day !== 'hoy' && new Date(c.starts_at) - now > 7 * 864e5) return null;
+  const when = st === 'live' ? 'En directo ahora: entra ya' : st === 'soon' ? `Empieza en ${minsTo(c, now)} min` : day === 'hoy' ? 'Puedes entrar desde 15 minutos antes' : `Próxima clase: ${day}`;
+  return (
+    <Hero color={day === 'hoy' ? 't-p' : 't-s'} kicker={`Clase en directo · ${day}`} title={classTime(c)} sub={c.note || when}>
+      {c.note && <span className="sub">{when}</span>}
+      <div className="row"><a className={'btn' + (st === 'later' ? '' : ' pri')} href={c.meet_url} target="_blank" rel="noopener">Unirse a la clase</a></div>
+    </Hero>
+  );
+}
+
 function WeekNote({ ctx }) {
   const { weekNotes = [], coach } = ctx;
   const monday = iso(mondayOf(new Date()));

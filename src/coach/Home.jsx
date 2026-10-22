@@ -21,7 +21,7 @@ export const waText = (p, kind, coach, extra = '', offset = 0) => fill(pick(kind
 const Lnk = ({ onClick, children }) => <button type="button" className="lnk" onClick={onClick}>{children}</button>;
 
 export default function Home() {
-  const { players, alerts, tasks, notes, programs, logs, tests = [], payments = [], leads = [], alertActions = [], coach, go } = useCoach();
+  const { players, alerts, tasks, notes, programs, logs, tests = [], payments = [], leads = [], alertActions = [], liveClasses = [], coach, go } = useCoach();
   const today = iso();
   const active = players.filter((p) => !p.end_date);
   const pname = (id) => players.find((p) => p.id === id);
@@ -67,6 +67,7 @@ export default function Home() {
   const rem = [
     ...tasks.filter((t) => !t.done && new Date(t.due_at) <= limit).map((t) => ({ id: 't' + t.id, when: new Date(t.due_at), text: t.title, p: pname(t.player_id) })),
     ...notes.filter((n) => !n.done && n.remind_at && new Date(n.remind_at) <= limit).map((n) => ({ id: 'n' + n.id, when: new Date(n.remind_at), text: n.text, p: pname(n.player_id) })),
+    ...liveClasses.filter((c) => new Date(c.starts_at).getTime() + (c.duration_min || 60) * 60000 > Date.now() && new Date(c.starts_at) <= limit).map((c) => ({ id: 'lc' + c.id, when: new Date(c.starts_at), text: 'Clase en directo', p: pname(c.player_id) })),
     ...leads.filter((l) => l.status === 'activa' && l.call_at && (l.stage || 0) < 3 && new Date(l.call_at) <= limit).map((l) => ({ id: 'c' + l.id, when: new Date(l.call_at), text: `Videollamada con ${l.name}` })),
     ...alertActions.filter((a) => a.status === 'pendiente' && a.due_date && parseISO(a.due_date) <= limit).map((a) => ({ id: 'a' + a.id, when: parseISO(a.due_date), allDay: true, text: `Alerta${a.note ? ': ' + a.note : ''}`, p: pname(a.player_id) })),
   ].sort((a, b) => a.when - b.when).slice(0, 6);
