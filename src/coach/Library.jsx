@@ -3,15 +3,20 @@ import { useCoach } from './CoachApp.jsx';
 import { supabase, q } from '../lib/supabase.js';
 import { matches, norm } from '../lib/util.js';
 import { parseCSV } from '../lib/csv.js';
-import { useAction, useToast, Empty } from '../ui/ui.jsx';
+import { useAction, useToast, Empty, Tabs } from '../ui/ui.jsx';
 import { PACK_TYPES } from '../lib/program.js';
 import { BASIC } from './basicLibrary.js';
 
 export const MUSCLES = ['Cuádriceps', 'Isquiotibiales', 'Glúteos', 'Aductores', 'Gemelos', 'Pectoral', 'Dorsal', 'Espalda alta', 'Deltoides', 'Bíceps', 'Tríceps', 'Core', 'Cuello'];
 
 
+const SUB = { pendiente: ['En revisión', 'warn'], aprobado: ['Pública', 'ok'], rechazado: ['No publicada', 'bad'] };
+
 export default function Library() {
-  const { exercises, uid, load, route } = useCoach();
+  const { exercises, uid, load, route, publicExercises = [] } = useCoach();
+  const [view, setView] = useState('mine');
+  const subOf = (e) => publicExercises.filter((x) => x.source_id === e.id && x.author_id === uid).sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+  const nPublic = publicExercises.filter((x) => x.status === 'aprobado').length;
   const act = useAction();
   const toast = useToast();
   const fromSearch = route.id?.startsWith('q=') ? decodeURIComponent(route.id.slice(2)) : '';
@@ -51,7 +56,9 @@ export default function Library() {
         </div>
       </div>
       {importing && <Importer onClose={() => setImporting(false)} />}
-      {edit && <ExForm ex={edit === 'new' ? null : edit} onClose={() => setEdit(null)} />}
+      {edit && <ExForm ex={edit === 'new' ? null : edit} sub={edit === 'new' ? null : subOf(edit)} onClose={() => setEdit(null)} />}
+      <Tabs tabs={[['mine', `Mi biblioteca (${exercises.length})`], ['public', `Biblioteca pública (${nPublic})`]]} value={view} onChange={setView} />
+      {view === 'public' ? <PublicLibrary /> : <>
       <div className="row">
         <input id="libq" style={{ maxWidth: 320 }} placeholder="Buscar ejercicio o músculo" value={qy} onChange={(e) => setQy(e.target.value)} />
         <select id="libtype" style={{ width: 'auto' }} value={type} onChange={(e) => { setType(e.target.value); setLimit(150); }}><option value="">Todos los tipos</option>{types.map((t) => <option key={t}>{t}</option>)}<option value="__nomus">Sin músculos ({noMus})</option><option value="__novid">Sin vídeo</option></select>
@@ -64,7 +71,7 @@ export default function Library() {
             <tbody>
               {list.slice(0, limit).map((e) => (
                 <tr key={e.id}>
-                  <td><b>{e.name}</b>{e.category && <div className="small" style={{ color: 'var(--brand)' }}>{e.category}</div>}{e.notes && <div className="muted small clamp">{e.notes}</div>}</td>
+                  <td><b>{e.name}</b>{subOf(e) && <span className={'pill sm ' + SUB[subOf(e).status][1]} style={{ marginLeft: 6 }} title={subOf(e).review_note || ''}>{SUB[subOf(e).status][0]}</span>}{e.category && <div className="small" style={{ color: 'var(--brand)' }}>{e.category}</div>}{e.notes && <div className="muted small clamp">{e.notes}</div>}</td>
                   <td>{e.type}</td>
                   <td className="small"><b>{e.primary_muscle || '—'}</b>{e.secondary?.length ? ' · ' + e.secondary.join(', ') : ''}</td>
                   <td>{e.video_url ? <a href={e.video_url} target="_blank" rel="noopener">Ver</a> : <span className="muted">—</span>}</td>
@@ -76,25 +83,80 @@ export default function Library() {
           {list.length > limit && <div className="row" style={{ justifyContent: 'center', padding: 10 }}><button className="btn" onClick={() => setLimit(limit + 300)}>Ver más ({list.length - limit} restantes)</button></div>}
         </div>
       ) : <Empty>{exercises.length ? 'Ningún ejercicio coincide.' : 'Tu biblioteca está vacía. Carga la básica o añade tus ejercicios.'}</Empty>}
+      </>}
     </>
   );
 }
 
-function ExForm({ ex, onClose }) {
-  const { uid, load } = useCoach();
+// Biblioteca pública: ejercicios aprobados por un administrador; se copian a la tuya para usarlos
+function PublicLibrary() {
+  const { exercises, uid, load, publicExercises = [] } = useCoach();
   const act = useAction();
-  const [f, setF] = useState(ex ? { ...ex } : { name: '', type: 'Fuerza', primary_muscle: 'Cuádriceps', secondary: [], video_url: '', notes: '' });
+  const [qy, setQy] = useState('');
+  const [type, setType] = useState('');
+  const [limit, setLimit] = useState(150);
+  const pub = publicExercises.filter((x) => x.status === 'aprobado');
+  const have = new Set(exercises.map((e) => norm(e.name)));
+  const types = [...new Set(pub.map((e) => e.type))].sort();
+  const list = pub.filter((e) => (!type || e.type === type) && matches(`${e.name} ${e.type} ${e.primary_muscle || ''} ${(e.secondary || []).join(' ')} ${e.category || ''} ${e.author_name || ''}`, qy));
+  const missing = list.filter((e) => !have.has(norm(e.name)));
+  const toRow = (e) => ({ coach_id: uid, name: e.name, type: e.type, primary_muscle: e.primary_muscle, secondary: e.secondary || [], video_url: e.video_url, notes: e.notes, category: e.category });
+  const add = (rows, msg) => act(async () => {
+    for (let i = 0; i < rows.length; i += 200) await q(supabase.from('exercises').insert(rows.slice(i, i + 200).map(toRow)));
+    await load('exercises');
+  }, msg);
+  return (
+    <>
+      <p className="muted small">Ejercicios que comparten los entrenadores de Rendimo, revisados por un administrador. Añádelos a tu biblioteca para usarlos en tus programas. Para compartir uno tuyo, créalo o edítalo y marca «Compartir en la biblioteca pública».</p>
+      <div className="row">
+        <input aria-label="Buscar en la biblioteca pública" style={{ maxWidth: 320 }} placeholder="Buscar ejercicio, músculo o autor" value={qy} onChange={(e) => setQy(e.target.value)} />
+        <select aria-label="Tipo" style={{ width: 'auto' }} value={type} onChange={(e) => setType(e.target.value)}><option value="">Todos los tipos</option>{types.map((t) => <option key={t}>{t}</option>)}</select>
+        <span className="muted small">{list.length} de {pub.length}</span>
+        {missing.length > 1 && <button className="btn sm" onClick={() => add(missing, `${missing.length} ejercicios añadidos a tu biblioteca.`)}>Añadir los {missing.length} que no tengo</button>}
+      </div>
+      {list.length ? (
+        <div className="panel tablewrap">
+          <table>
+            <thead><tr><th>Ejercicio</th><th>Tipo</th><th>Músculos</th><th>Vídeo</th><th></th></tr></thead>
+            <tbody>{list.slice(0, limit).map((e) => (
+              <tr key={e.id}>
+                <td><b>{e.name}</b>{e.notes && <div className="muted small clamp">{e.notes}</div>}<div className="muted small">Compartido por {e.author_name || 'Rendimo'}</div></td>
+                <td>{e.type}</td>
+                <td className="small"><b>{e.primary_muscle || '—'}</b>{e.secondary?.length ? ' · ' + e.secondary.join(', ') : ''}</td>
+                <td>{e.video_url ? <a href={e.video_url} target="_blank" rel="noopener">Ver</a> : <span className="muted">—</span>}</td>
+                <td style={{ whiteSpace: 'nowrap' }}>{have.has(norm(e.name)) ? <span className="pill ok">Ya la tienes</span> : <button className="btn sm" onClick={() => add([e], `«${e.name}» añadido a tu biblioteca.`)}>Añadir a la mía</button>}</td>
+              </tr>
+            ))}</tbody>
+          </table>
+          {list.length > limit && <div className="row" style={{ justifyContent: 'center', padding: 10 }}><button className="btn" onClick={() => setLimit(limit + 300)}>Ver más ({list.length - limit} restantes)</button></div>}
+        </div>
+      ) : <Empty>{pub.length ? 'Nada coincide.' : 'Aún no hay ejercicios públicos. Comparte el primero desde tu biblioteca.'}</Empty>}
+    </>
+  );
+}
+
+function ExForm({ ex, sub, onClose }) {
+  const { uid, load, isAdmin } = useCoach();
+  const act = useAction();
+  const [f, setF] = useState(ex ? { ...ex, share: false } : { name: '', type: 'Fuerza', primary_muscle: 'Cuádriceps', secondary: [], video_url: '', notes: '', share: false });
+  const canShare = !sub || sub.status === 'rechazado';
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   const toggleSec = (m) => setF({ ...f, secondary: f.secondary.includes(m) ? f.secondary.filter((x) => x !== m) : [...f.secondary, m] });
   const save = (e) => {
     e.preventDefault();
     act(async () => {
       const row = { name: f.name.trim(), type: f.type, primary_muscle: f.primary_muscle || null, secondary: f.secondary.filter((m) => m !== f.primary_muscle), video_url: f.video_url || null, notes: f.notes || null, category: f.category || null };
+      let id = ex?.id;
       if (ex) await q(supabase.from('exercises').update(row).eq('id', ex.id));
-      else await q(supabase.from('exercises').insert({ ...row, coach_id: uid }));
-      await load('exercises');
+      else id = (await q(supabase.from('exercises').insert({ ...row, coach_id: uid }).select().single())).id;
+      if (f.share && canShare) {
+        // Siempre queda en tu biblioteca; la copia pública la aprueba un administrador
+        const r = await supabase.from('public_exercises').insert({ ...row, source_id: id, status: isAdmin ? 'aprobado' : 'pendiente', reviewed_at: isAdmin ? new Date().toISOString() : null });
+        if (r.error) throw new Error(/public_exercises_name_ok|duplicate/.test(r.error.message) ? `Guardado en tu biblioteca, pero ya hay un ejercicio público llamado «${row.name}».` : 'Guardado en tu biblioteca, pero no se pudo enviar a la pública: ' + r.error.message);
+        await load(['exercises', 'publicExercises']);
+      } else await load('exercises');
       onClose();
-    }, ex ? 'Ejercicio actualizado.' : 'Ejercicio añadido. Ya aparece en Programación.');
+    }, f.share && canShare ? (isAdmin ? 'Guardado y publicado en la biblioteca pública.' : 'Guardado en tu biblioteca y enviado a revisión para la pública.') : ex ? 'Ejercicio actualizado.' : 'Ejercicio añadido. Ya aparece en Programación.');
   };
   return (
     <form className="panel stack" onSubmit={save}>
@@ -113,6 +175,16 @@ function ExForm({ ex, onClose }) {
       </div>
       <label className="f">Categoría (para buscar y ordenar)<input value={f.category || ''} onChange={set('category')} placeholder="Ej. Fuerza › Dominante de rodilla" /></label>
       <label className="f">Explicación o puntos clave<textarea value={f.notes || ''} onChange={set('notes')} /></label>
+      <fieldset className="sharebox">
+        <legend>Visibilidad</legend>
+        <p className="small" style={{ margin: 0 }}><b>Privado:</b> siempre se guarda en tu biblioteca y solo lo ves tú.</p>
+        {canShare ? (
+          <label className="row small" style={{ alignItems: 'flex-start' }}>
+            <input id="ex-share" type="checkbox" style={{ width: 'auto', marginTop: 3 }} checked={f.share} onChange={(e) => setF({ ...f, share: e.target.checked })} />
+            <span><b>Compartir también en la biblioteca pública</b> para que lo usen todos los entrenadores. {isAdmin ? 'Como administrador, se publica al momento.' : 'Un administrador lo revisa antes de publicarlo.'}{sub?.status === 'rechazado' && <span className="muted"> La otra vez no se publicó{sub.review_note ? `: ${sub.review_note}` : ''}.</span>}</span>
+          </label>
+        ) : <p className="small" style={{ margin: 0 }}><b>Público:</b> {sub.status === 'aprobado' ? 'ya está en la biblioteca pública.' : 'enviado, pendiente de revisión.'} Los cambios que hagas aquí solo afectan a tu copia.</p>}
+      </fieldset>
       <div className="row"><button className="btn pri" type="submit">Guardar</button><button type="button" className="btn" onClick={onClose}>Cancelar</button></div>
     </form>
   );

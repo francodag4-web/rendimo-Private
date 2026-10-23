@@ -4,7 +4,7 @@ import { ThemePicker, Group, Row, LegalRows, AppVersion } from '../ui/SettingsKi
 
 // Barra inferior del entrenador en el móvil: 4 secciones + «Inicio» en el centro y «Más» con el resto
 const MAIN = [['agenda', 'Agenda'], ['clientes', 'Clientes'], ['inicio', 'Inicio'], ['programacion', 'Programa']];
-const MORE = [['solicitudes', 'Solicitudes'], ['pagos', 'Pagos'], ['planes', 'Planes'], ['biblioteca', 'Biblioteca'], ['ajustes', 'Ajustes']];
+const MORE = [['solicitudes', 'Solicitudes'], ['pagos', 'Pagos'], ['planes', 'Planes'], ['biblioteca', 'Biblioteca'], ['formacion', 'Formación'], ['ayuda', 'Ayuda'], ['admin', 'Administración'], ['ajustes', 'Ajustes']];
 
 function Icon({ k }) {
   const p = { width: 22, height: 22, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true };
@@ -41,8 +41,10 @@ export function MobileNav({ route, go, badge }) {
 
 // Pantalla «Más»: el resto de secciones y los ajustes, agrupados como en los ajustes del móvil
 export function CoachMenu() {
-  const { go, leads = [], session, onLogout, canSwitch, onSwitch } = useCoach();
+  const { go, leads = [], session, onLogout, canSwitch, onSwitch, isAdmin, requests = [], publicExercises = [], docs = [] } = useCoach();
   const newLeads = leads.filter((l) => l.status === 'activa' && !l.stage).length;
+  const replies = requests.filter((r) => r.author_id === session.user.id && !r.author_seen).length;
+  const pending = publicExercises.filter((x) => x.status === 'pendiente').length + docs.filter((x) => x.status === 'pendiente').length + requests.filter((x) => x.status === 'abierta').length;
   return (
     <div className="setpage">
       <div className="pagehead"><div><h1>Más</h1></div></div>
@@ -53,6 +55,15 @@ export function CoachMenu() {
         <Row icon="tag" label="Planes" onClick={() => go('planes')} />
         <Row icon="book" label="Biblioteca" onClick={() => go('biblioteca')} />
       </Group>
+      <Group title="Aprende y pide">
+        <Row icon="file" label="Formación" sub="Manual de uso y documentos compartidos" onClick={() => go('formacion')} />
+        <Row icon="chat" label="Ayuda y peticiones" sub="Dudas, mejoras o algo que no funciona" badge={replies} onClick={() => go('ayuda')} />
+      </Group>
+      {isAdmin && (
+        <Group title="Administración">
+          <Row icon="shield" label="Administración" sub="Peticiones, aprobaciones y entrenadores" badge={pending} onClick={() => go('admin')} />
+        </Group>
+      )}
       <Group title="Lo tuyo">
         <Row icon="palette" label="Marca y mensajes" sub="Nombre, logo, color, formulario y WhatsApp" onClick={() => go('ajustes')} />
         <Row icon="lock" label="Seguridad" sub="Contraseña" onClick={() => go('ajustes', 'seguridad')} />

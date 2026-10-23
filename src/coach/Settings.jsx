@@ -5,11 +5,11 @@ import { fileToDataURL } from '../lib/util.js';
 import { applyBrand } from '../App.jsx';
 import { useAction } from '../ui/ui.jsx';
 import { MESSAGES } from '../lib/messages.js';
-import CoachAccess, { useIsAdmin } from './CoachAccess.jsx';
+import { useIsAdmin } from './CoachAccess.jsx';
 import { ThemePicker, Group, Row, PasswordForm, DeleteAccount, LegalRows, AppVersion } from '../ui/SettingsKit.jsx';
 
 export default function Settings() {
-  const { coach, load, route, session, onLogout, canSwitch, onSwitch } = useCoach();
+  const { coach, load, route, session, onLogout, canSwitch, onSwitch, go } = useCoach();
   // Desde «Más» se llega directo a una sección: #/ajustes/seguridad o #/ajustes/borrar
   useEffect(() => { if (route.id) setTimeout(() => document.getElementById('set-' + route.id)?.scrollIntoView({ block: 'center' }), 50); }, [route.id]);
   const act = useAction();
@@ -74,7 +74,7 @@ export default function Settings() {
       </details>
       {admin && (
         <Group title="Plataforma">
-          <Row key={"e" + route.id} id="set-entrenadores" icon="user" label="Autorizar entrenadores" sub="Solo lo ves tú, como administrador" defaultOpen={route.id === 'entrenadores'}><CoachAccess /></Row>
+          <Row id="set-entrenadores" icon="shield" label="Administración" sub="Peticiones, aprobaciones y autorizar entrenadores" onClick={() => go('admin', route.id === 'entrenadores' ? 'entrenadores' : undefined)} />
         </Group>
       )}
       <Group title="Seguridad">

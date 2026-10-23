@@ -8,6 +8,9 @@ import Clients from './Clients.jsx';
 import Programs from './Programs.jsx';
 import Library from './Library.jsx';
 import Agenda from './Agenda.jsx';
+import Training from './Training.jsx';
+import Help from './Help.jsx';
+import Admin, { adminCounts } from './Admin.jsx';
 import Settings from './Settings.jsx';
 import Leads from './Leads.jsx';
 import Payments from './Payments.jsx';
@@ -29,10 +32,12 @@ const PAGES = [
   ['solicitudes', 'Solicitudes'],
   ['pagos', 'Pagos'],
   ['planes', 'Planes'],
+  ['formacion', 'Formación'],
+  ['ayuda', 'Ayuda y peticiones'],
   ['ajustes', 'Ajustes'],
 ];
-// Páginas sin hueco en el menú lateral (el «Más» del móvil)
-const HIDDEN = ['mas'];
+// Páginas sin hueco fijo en el menú lateral (el «Más» del móvil y la administración)
+const HIDDEN = ['mas', 'admin'];
 
 // Navegación con #hash para que funcione el botón atrás del móvil
 function useHashRoute() {
@@ -83,6 +88,10 @@ export default function CoachApp({ session, onLogout, canSwitch, onSwitch }) {
       goals: () => soft(supabase.from('goals').select('*').order('deadline', { nullsFirst: false })),
       body: () => soft(supabase.from('body_measures').select('*').order('date')),
       reports: () => soft(supabase.from('reports').select('*').order('created_at', { ascending: false })),
+      publicExercises: () => soft(supabase.from('public_exercises').select('*').order('name')),
+      requests: () => soft(supabase.from('support_requests').select('*').order('created_at', { ascending: false })),
+      docs: () => soft(supabase.from('training_docs').select('*').order('created_at', { ascending: false })),
+      isAdmin: () => ({ then: (ok) => supabase.rpc('is_platform_admin').then(({ data }) => ({ data: data === true, error: null })).then(ok) }),
       liveClasses: () => soft(supabase.from('live_classes').select('*').gte('starts_at', addDays(new Date(), -60).toISOString()).order('starts_at')),
     };
     const keys = only ? [].concat(only) : Object.keys(jobs);
@@ -100,6 +109,13 @@ export default function CoachApp({ session, onLogout, canSwitch, onSwitch }) {
   }, [uid]);
 
   useEffect(() => { load(); }, [load]);
+  // Al volver a la app (otra pestaña, móvil desbloqueado), trae respuestas, aprobaciones y documentos nuevos
+  useEffect(() => {
+    let last = Date.now();
+    const on = () => { if (document.visibilityState === 'visible' && Date.now() - last > 30000) { last = Date.now(); load(['requests', 'docs', 'publicExercises', 'leads']); } };
+    document.addEventListener('visibilitychange', on); window.addEventListener('focus', on);
+    return () => { document.removeEventListener('visibilitychange', on); window.removeEventListener('focus', on); };
+  }, [load]);
   useEffect(() => { if (d?.coach) applyBrand(d.coach.color); }, [d?.coach?.color]);
   useEffect(() => {
     if (d?.coach) document.title = d.coach.brand_short || d.coach.brand_name || PLATFORM;
@@ -163,8 +179,9 @@ export default function CoachApp({ session, onLogout, canSwitch, onSwitch }) {
   const ctx = { ...d, load, go, route, alerts, uid, session, onLogout, canSwitch, onSwitch };
   const newLeads = (d.leads || []).filter((l) => l.status === 'activa' && !l.stage).length;
   const coach = d.coach;
-  const Page = { inicio: Home, clientes: Clients, programacion: Programs, biblioteca: Library, agenda: Agenda, ajustes: Settings, solicitudes: Leads, pagos: Payments, planes: Plans, mas: CoachMenu }[route.page];
-  const badge = { inicio: openAlerts + d.players.filter((p) => p.delete_requested_at).length, agenda: due, solicitudes: newLeads };
+  const Page = { inicio: Home, clientes: Clients, programacion: Programs, biblioteca: Library, agenda: Agenda, ajustes: Settings, solicitudes: Leads, pagos: Payments, planes: Plans, mas: CoachMenu, formacion: Training, ayuda: Help, admin: d.isAdmin ? Admin : Home }[route.page];
+  const adminPending = d.isAdmin ? adminCounts(d).total : 0;
+  const badge = { inicio: openAlerts + d.players.filter((p) => p.delete_requested_at).length, agenda: due, solicitudes: newLeads, ayuda: (d.requests || []).filter((r) => r.author_id === uid && !r.author_seen).length, admin: adminPending };
 
   const Brand = (
     <div className="brand">
@@ -179,7 +196,7 @@ export default function CoachApp({ session, onLogout, canSwitch, onSwitch }) {
         <aside className="side">
           {Brand}
           <nav className="nav" aria-label="Secciones">
-            {PAGES.map(([k, l]) => (
+            {[...PAGES, ...(d.isAdmin ? [['admin', 'Administración']] : [])].map(([k, l]) => (
               <button key={k} type="button" aria-current={route.page === k ? 'page' : undefined} onClick={() => go(k)}>
                 {l}{badge[k] ? <span className="badge">{badge[k]}</span> : null}
               </button>

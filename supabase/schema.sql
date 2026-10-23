@@ -1024,3 +1024,164 @@ create policy live_classes_coach on public.live_classes for all to authenticated
 drop policy if exists live_classes_self on public.live_classes;
 create policy live_classes_self on public.live_classes for select to authenticated
   using (player_id = public.my_player_id());
+
+-- ===== 19-plataforma.sql =====
+-- =====================================================================
+-- 19 · Biblioteca pública de ejercicios, peticiones a administradores
+--      y Formación (documentos compartidos). Se puede repetir.
+-- Pegar entero en Supabase -> SQL Editor -> Run.
+-- =====================================================================
+
+-- Rellena autor (id, nombre de marca y correo) al crear filas
+create or replace function public.stamp_author() returns trigger
+language plpgsql security definer set search_path = '' as $$
+declare c record;
+begin
+  select id, brand_name, email into c from public.coaches where id = auth.uid();
+  new.author_id := auth.uid();
+  new.author_name := coalesce(c.brand_name, '');
+  new.author_email := coalesce(c.email, '');
+  return new;
+end $$;
+
+-- ---------- 1. Biblioteca pública de ejercicios ----------
+create table if not exists public.public_exercises (
+  id             uuid primary key default gen_random_uuid(),
+  name           text not null check (length(name) between 2 and 120),
+  type           text not null default 'Fuerza',
+  primary_muscle text,
+  secondary      text[] not null default '{}',
+  video_url      text check (video_url is null or length(video_url) <= 500),
+  notes          text check (notes is null or length(notes) <= 2000),
+  category       text,
+  source_id      uuid,                         -- ejercicio de la biblioteca del autor
+  status         text not null default 'pendiente' check (status in ('pendiente','aprobado','rechazado')),
+  review_note    text,
+  reviewed_at    timestamptz,
+  author_id      uuid references auth.users(id) on delete set null,
+  author_name    text,
+  author_email   text,
+  created_at     timestamptz not null default now()
+);
+create unique index if not exists public_exercises_name_ok on public.public_exercises (lower(name)) where status = 'aprobado';
+drop trigger if exists public_exercises_author on public.public_exercises;
+create trigger public_exercises_author before insert on public.public_exercises for each row execute function public.stamp_author();
+alter table public.public_exercises enable row level security;
+grant select, insert, update, delete on public.public_exercises to authenticated;
+drop policy if exists pubex_read on public.public_exercises;
+create policy pubex_read on public.public_exercises for select to authenticated
+  using ((status = 'aprobado' and public.is_coach()) or author_id = auth.uid() or public.is_platform_admin());
+drop policy if exists pubex_insert on public.public_exercises;
+create policy pubex_insert on public.public_exercises for insert to authenticated
+  with check (public.is_coach() and (status = 'pendiente' or public.is_platform_admin()));
+drop policy if exists pubex_update on public.public_exercises;
+create policy pubex_update on public.public_exercises for update to authenticated
+  using (public.is_platform_admin()) with check (public.is_platform_admin());
+drop policy if exists pubex_delete on public.public_exercises;
+create policy pubex_delete on public.public_exercises for delete to authenticated
+  using (public.is_platform_admin() or (author_id = auth.uid() and status <> 'aprobado'));
+
+-- ---------- 2. Peticiones, dudas y sugerencias a los administradores ----------
+create table if not exists public.support_requests (
+  id           uuid primary key default gen_random_uuid(),
+  kind         text not null default 'duda' check (kind in ('duda','mejora','error','otro')),
+  subject      text not null check (length(subject) between 2 and 140),
+  message      text not null check (length(message) between 2 and 4000),
+  status       text not null default 'abierta' check (status in ('abierta','respondida','cerrada')),
+  reply        text,
+  replied_at   timestamptz,
+  author_seen  boolean not null default true,  -- false cuando hay respuesta sin leer
+  author_id    uuid references auth.users(id) on delete cascade,
+  author_name  text,
+  author_email text,
+  created_at   timestamptz not null default now()
+);
+drop trigger if exists support_requests_author on public.support_requests;
+create trigger support_requests_author before insert on public.support_requests for each row execute function public.stamp_author();
+alter table public.support_requests enable row level security;
+grant select, insert, delete on public.support_requests to authenticated;
+drop policy if exists support_read on public.support_requests;
+create policy support_read on public.support_requests for select to authenticated
+  using (author_id = auth.uid() or public.is_platform_admin());
+drop policy if exists support_insert on public.support_requests;
+create policy support_insert on public.support_requests for insert to authenticated
+  with check (public.is_coach() and status = 'abierta' and reply is null);
+
+drop policy if exists support_delete on public.support_requests;
+create policy support_delete on public.support_requests for delete to authenticated
+  using (public.is_platform_admin());
+
+create or replace function public.answer_request(rid uuid, answer text, new_status text default 'respondida') returns void
+language plpgsql security definer set search_path = '' as $$
+begin
+  if not public.is_platform_admin() then raise exception 'Solo para administradores'; end if;
+  if new_status not in ('abierta','respondida','cerrada') then raise exception 'Estado no válido'; end if;
+  update public.support_requests
+     set reply = coalesce(nullif(trim(answer), ''), reply),
+         replied_at = case when nullif(trim(answer), '') is not null then now() else replied_at end,
+         status = new_status,
+         author_seen = case when nullif(trim(answer), '') is not null then false else author_seen end
+   where id = rid;
+end $$;
+create or replace function public.mark_requests_seen() returns void
+language sql security definer set search_path = '' as $$
+  update public.support_requests set author_seen = true where author_id = auth.uid() and not author_seen;
+$$;
+
+-- ---------- 3. Formación: artículos y documentos ----------
+create table if not exists public.training_docs (
+  id           uuid primary key default gen_random_uuid(),
+  title        text not null check (length(title) between 2 and 160),
+  summary      text check (summary is null or length(summary) <= 1000),
+  category     text not null default 'Entrenamiento',
+  file_path    text,                           -- archivo en el almacén «formacion»
+  file_name    text,
+  link_url     text check (link_url is null or link_url ~ '^https?://'),
+  status       text not null default 'pendiente' check (status in ('pendiente','publicado','rechazado')),
+  review_note  text,
+  reviewed_at  timestamptz,
+  author_id    uuid references auth.users(id) on delete set null,
+  author_name  text,
+  author_email text,
+  created_at   timestamptz not null default now(),
+  check (file_path is not null or link_url is not null)
+);
+drop trigger if exists training_docs_author on public.training_docs;
+create trigger training_docs_author before insert on public.training_docs for each row execute function public.stamp_author();
+alter table public.training_docs enable row level security;
+grant select, insert, update, delete on public.training_docs to authenticated;
+drop policy if exists docs_read on public.training_docs;
+create policy docs_read on public.training_docs for select to authenticated
+  using ((status = 'publicado' and public.is_coach()) or author_id = auth.uid() or public.is_platform_admin());
+drop policy if exists docs_insert on public.training_docs;
+create policy docs_insert on public.training_docs for insert to authenticated
+  with check (public.is_coach() and (status = 'pendiente' or public.is_platform_admin()));
+drop policy if exists docs_update on public.training_docs;
+create policy docs_update on public.training_docs for update to authenticated
+  using (public.is_platform_admin()) with check (public.is_platform_admin());
+drop policy if exists docs_delete on public.training_docs;
+create policy docs_delete on public.training_docs for delete to authenticated
+  using (public.is_platform_admin() or (author_id = auth.uid() and status <> 'publicado'));
+
+-- Almacén de archivos (PDF, Word, PowerPoint, imágenes; máx. 25 MB)
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('formacion', 'formacion', true, 26214400, array[
+  'application/pdf', 'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'image/png', 'image/jpeg'])
+on conflict (id) do update set public = excluded.public, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists formacion_insert on storage.objects;
+create policy formacion_insert on storage.objects for insert to authenticated
+  with check (bucket_id = 'formacion' and public.is_coach() and (storage.foldername(name))[1] = auth.uid()::text);
+drop policy if exists formacion_delete on storage.objects;
+create policy formacion_delete on storage.objects for delete to authenticated
+  using (bucket_id = 'formacion' and ((storage.foldername(name))[1] = auth.uid()::text or public.is_platform_admin()));
+
+revoke all on function public.answer_request(uuid, text, text) from public, anon;
+revoke all on function public.mark_requests_seen() from public, anon;
+grant execute on function public.answer_request(uuid, text, text) to authenticated;
+grant execute on function public.mark_requests_seen() to authenticated;
+
