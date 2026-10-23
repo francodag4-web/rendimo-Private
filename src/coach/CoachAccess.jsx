@@ -35,6 +35,18 @@ function Share({ email }) {
   );
 }
 
+// Acceso a la biblioteca pública de ejercicios (lo das tú, entrenador a entrenador)
+function LibToggle({ c, after }) {
+  const act = useAction();
+  return (
+    <label className="row small" title="Acceso a la biblioteca pública de ejercicios">
+      <input type="checkbox" style={{ width: 'auto' }} aria-label={`Biblioteca pública para ${c.email}`} checked={!!c.library_access}
+        onChange={(e) => { const on = e.target.checked; act(async () => { await rpc('set_library_access', { mail: c.email, allow: on }); await after(); }, on ? `${c.email} ya ve la biblioteca pública.` : `${c.email} ya no ve la biblioteca pública.`); }} />
+      Biblioteca pública
+    </label>
+  );
+}
+
 function Revoke({ email, after }) {
   const act = useAction();
   const [sure, setSure] = useState(false);
@@ -82,6 +94,7 @@ export default function CoachAccess() {
               </span>
               <span className="row">
                 <span className={'pill ' + (c.joined ? 'ok' : 'warn')}>{c.joined ? 'Activo' : 'Pendiente'}</span>
+                {c.joined && !c.is_admin && c.library_access !== undefined && <LibToggle c={c} after={reload} />}
                 {!c.joined && <Share email={c.email} />}
                 {!c.joined && <Revoke email={c.email} after={reload} />}
               </span>

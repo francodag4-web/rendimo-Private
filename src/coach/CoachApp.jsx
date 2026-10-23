@@ -88,7 +88,7 @@ export default function CoachApp({ session, onLogout, canSwitch, onSwitch }) {
       goals: () => soft(supabase.from('goals').select('*').order('deadline', { nullsFirst: false })),
       body: () => soft(supabase.from('body_measures').select('*').order('date')),
       reports: () => soft(supabase.from('reports').select('*').order('created_at', { ascending: false })),
-      publicExercises: () => soft(supabase.from('public_exercises').select('*').order('name')),
+      publicExercises: () => ({ then: (ok) => fetchAll(() => supabase.from('public_exercises').select('*').order('name').order('id')).then((data) => ({ data, error: null }), () => ({ data: [], error: null })).then(ok) }),
       requests: () => soft(supabase.from('support_requests').select('*').order('created_at', { ascending: false })),
       docs: () => soft(supabase.from('training_docs').select('*').order('created_at', { ascending: false })),
       isAdmin: () => ({ then: (ok) => supabase.rpc('is_platform_admin').then(({ data }) => ({ data: data === true, error: null })).then(ok) }),

@@ -1185,3 +1185,56 @@ revoke all on function public.mark_requests_seen() from public, anon;
 grant execute on function public.answer_request(uuid, text, text) to authenticated;
 grant execute on function public.mark_requests_seen() to authenticated;
 
+
+-- ===== 20-acceso-biblioteca.sql =====
+-- =====================================================================
+-- 20 · Acceso a la biblioteca pública solo para los entrenadores que tú
+--      marques, y publicación de toda tu biblioteca. Se puede repetir.
+-- Pegar entero en Supabase -> SQL Editor -> seleccionar todo -> Run.
+-- =====================================================================
+
+-- 1. Permiso por entrenador (por defecto, no)
+alter table public.coaches add column if not exists library_access boolean not null default false;
+-- Los entrenadores que ya están dentro hoy, con acceso
+update public.coaches set library_access = true where not library_access;
+
+create or replace function public.has_library_access() returns boolean
+language sql stable security definer set search_path = '' as $$
+  select public.is_platform_admin()
+      or exists (select 1 from public.coaches where id = auth.uid() and library_access);
+$$;
+grant execute on function public.has_library_access() to authenticated;
+
+drop policy if exists pubex_read on public.public_exercises;
+create policy pubex_read on public.public_exercises for select to authenticated
+  using ((status = 'aprobado' and public.has_library_access()) or author_id = auth.uid() or public.is_platform_admin());
+
+-- 2. Lista de entrenadores con su permiso, y el interruptor (solo administradores)
+drop function if exists public.list_coach_access();
+create function public.list_coach_access()
+returns table (email text, created_at timestamptz, joined boolean, brand_name text, is_admin boolean, is_client boolean, library_access boolean)
+language plpgsql stable security definer set search_path = '' as $$
+begin
+  if not public.is_platform_admin() then raise exception 'Solo para administradores'; end if;
+  return query
+    select a.email, a.created_at,
+           exists (select 1 from public.coaches c where lower(c.email) = a.email),
+           (select c.brand_name from public.coaches c where lower(c.email) = a.email limit 1),
+           exists (select 1 from public.platform_admins pa where pa.email = a.email),
+           exists (select 1 from public.players p where lower(p.email) = a.email),
+           coalesce((select c.library_access from public.coaches c where lower(c.email) = a.email limit 1), false)
+      from public.coach_allowlist a
+     order by a.created_at desc;
+end $$;
+revoke all on function public.list_coach_access() from public, anon;
+grant execute on function public.list_coach_access() to authenticated;
+
+create or replace function public.set_library_access(mail text, allow boolean) returns void
+language plpgsql security definer set search_path = '' as $$
+begin
+  if not public.is_platform_admin() then raise exception 'Solo para administradores'; end if;
+  update public.coaches set library_access = allow where lower(email) = lower(trim(mail));
+end $$;
+revoke all on function public.set_library_access(text, boolean) from public, anon;
+grant execute on function public.set_library_access(text, boolean) to authenticated;
+

@@ -80,6 +80,39 @@ function Review({ onApprove, onReject, approveLabel = 'Aprobar' }) {
     : <span className="row"><input aria-label="Motivo" style={{ minWidth: 200 }} placeholder="Motivo (lo verá el autor)" value={rej} onChange={(e) => setRej(e.target.value)} /><button className="btn sm danger" onClick={() => onReject(rej)}>Rechazar</button><button className="btn sm" onClick={() => setRej(null)}>Cancelar</button></span>;
 }
 
+// Publica de una vez los ejercicios de tu biblioteca que aún no están en la pública (por nombre)
+function PublishMine() {
+  const { exercises = [], publicExercises = [], load } = useCoach();
+  const act = useAction();
+  const [busy, setBusy] = useState('');
+  const [onlyVideo, setOnlyVideo] = useState(false);
+  const taken = new Set(publicExercises.filter((x) => x.status === 'aprobado').map((x) => x.name.trim().toLowerCase()));
+  const todo = exercises.filter((e) => !taken.has(e.name.trim().toLowerCase()) && (!onlyVideo || e.video_url));
+  const run = () => act(async () => {
+    const now = new Date().toISOString();
+    const rows = todo.map((e) => ({ name: e.name.trim(), type: e.type, primary_muscle: e.primary_muscle, secondary: e.secondary || [], video_url: e.video_url, notes: e.notes, category: e.category, source_id: e.id, status: 'aprobado', reviewed_at: now }));
+    let done = 0; let skipped = 0;
+    for (let i = 0; i < rows.length; i += 200) {
+      setBusy(`Publicando ${Math.min(i + 200, rows.length)} de ${rows.length}…`);
+      const r = await supabase.from('public_exercises').insert(rows.slice(i, i + 200));
+      if (!r.error) { done += Math.min(200, rows.length - i); continue; }
+      // Si un lote choca por nombre repetido, se publica uno a uno y se saltan los repetidos
+      for (const x of rows.slice(i, i + 200)) { const r1 = await supabase.from('public_exercises').insert(x); if (r1.error) skipped += 1; else done += 1; }
+    }
+    setBusy('');
+    await load('publicExercises');
+    return { done, skipped };
+  }).then((res) => res && act(async () => {}, `${res.done} ejercicios publicados en la biblioteca pública${res.skipped ? ` (${res.skipped} repetidos se saltaron)` : ''}.`));
+  return (
+    <div className="panel stack" style={{ background: 'var(--soft)' }}>
+      <b>Publicar mi biblioteca</b>
+      <span className="small">Pasa a la biblioteca pública tus ejercicios con su vídeo, explicación y categoría. Siguen en tu biblioteca; los que ya son públicos (mismo nombre) no se duplican.</span>
+      <label className="row small"><input type="checkbox" style={{ width: 'auto' }} checked={onlyVideo} onChange={(e) => setOnlyVideo(e.target.checked)} /> Solo los que tienen vídeo</label>
+      <div className="row"><button className="btn pri" disabled={!!busy || !todo.length} onClick={run}>{busy || (todo.length ? `Publicar ${todo.length} ejercicios` : 'Ya está todo publicado')}</button></div>
+    </div>
+  );
+}
+
 function Exercises() {
   const { publicExercises = [], load } = useCoach();
   const act = useAction();
@@ -105,10 +138,11 @@ function Exercises() {
   );
   return (
     <section className="panel stack">
+      <PublishMine />
       <h3>Pendientes de revisar ({pend.length})</h3>
       {pend.length ? <ul className="list">{pend.map((x) => <Row key={x.id} x={x}><Review onApprove={() => setStatus(x, 'aprobado')} onReject={(n) => setStatus(x, 'rechazado', n)} approveLabel="Publicar" /></Row>)}</ul> : <Empty>No hay ejercicios pendientes.</Empty>}
       <button className="btn sm" style={{ alignSelf: 'flex-start' }} aria-expanded={showOk} onClick={() => setShowOk(!showOk)}>{showOk ? 'Ocultar' : 'Ver'} publicados ({ok.length})</button>
-      {showOk && <ul className="list">{ok.map((x) => <Row key={x.id} x={x}><button className="btn sm" onClick={() => remove(x)}>Retirar</button></Row>)}</ul>}
+      {showOk && <ul className="list">{ok.slice(0, 300).map((x) => <Row key={x.id} x={x}><button className="btn sm" onClick={() => remove(x)}>Retirar</button></Row>)}</ul>}
     </section>
   );
 }

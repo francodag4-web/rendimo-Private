@@ -90,6 +90,18 @@ export default function Library() {
 
 // Biblioteca pública: ejercicios aprobados por un administrador; se copian a la tuya para usarlos
 function PublicLibrary() {
+  const { coach, isAdmin, go } = useCoach();
+  if (isAdmin || coach.library_access !== false) return <PublicList />;
+  return (
+    <div className="panel stack" aria-label="Sin acceso a la biblioteca pública">
+      <h3>Biblioteca pública</h3>
+      <p className="muted">Más de mil ejercicios con vídeo y explicación, compartidos por los entrenadores de Rendimo. El acceso lo da un administrador.</p>
+      <div className="row"><button className="btn pri" onClick={() => go('ayuda')}>Pedir acceso</button></div>
+      <p className="muted small">Mientras tanto puedes compartir tus ejercicios: se quedan en revisión y, cuando tengas acceso, los verás aquí.</p>
+    </div>
+  );
+}
+function PublicList() {
   const { exercises, uid, load, publicExercises = [] } = useCoach();
   const act = useAction();
   const [qy, setQy] = useState('');
